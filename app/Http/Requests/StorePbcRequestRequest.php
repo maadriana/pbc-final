@@ -12,24 +12,28 @@ class StorePbcRequestRequest extends FormRequest
     }
 
     public function rules(): array
-    {
-        return [
-            'client_id' => ['required', 'exists:clients,id'],
-            'project_id' => ['required', 'exists:projects,id'],
-            'template_id' => ['nullable', 'exists:pbc_templates,id'],
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'due_date' => ['nullable', 'date', 'after:today'],
-            'header_info' => ['nullable', 'array'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.category' => ['nullable', 'string', 'max:255'],
-            'items.*.particulars' => ['required', 'string', 'max:1000'],
-            'items.*.date_requested' => ['nullable', 'date'],
-            'items.*.is_required' => ['boolean'],
-            'items.*.remarks' => ['nullable', 'string', 'max:500'],
-            'items.*.order_index' => ['integer', 'min:0'],
-        ];
-    }
+{
+    return [
+        'client_id' => ['required', 'exists:clients,id'],
+        'project_id' => ['required', 'exists:projects,id'],
+        'template_id' => ['nullable', 'exists:pbc_templates,id'],
+        'title' => ['required', 'string', 'max:255'],
+        'description' => ['nullable', 'string', 'max:1000'],
+        'due_date' => ['nullable', 'date', 'after_or_equal:today'],
+        'header_info' => ['nullable', 'array'],
+        'header_info.engagement_partner' => ['nullable', 'string', 'max:255'],
+        'header_info.engagement_manager' => ['nullable', 'string', 'max:255'],
+
+        // Make items validation more flexible
+        'items' => ['required', 'array', 'min:1'],
+        'items.*' => ['required', 'array'],
+        'items.*.category' => ['nullable', 'string', 'max:255'],
+        'items.*.particulars' => ['required', 'string', 'max:1000'],
+        'items.*.date_requested' => ['nullable', 'date'],
+        'items.*.is_required' => ['nullable', 'boolean'],
+        'items.*.remarks' => ['nullable', 'string', 'max:500'],
+    ];
+}
 
     public function messages(): array
     {

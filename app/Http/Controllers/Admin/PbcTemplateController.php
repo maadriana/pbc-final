@@ -149,15 +149,97 @@ class PbcTemplateController extends Controller
     }
 
     // AJAX endpoint for getting template items
-    public function getTemplateItems(PbcTemplate $pbcTemplate)
-    {
-        $items = $pbcTemplate->templateItems()
+      public function getTemplateItems(PbcTemplate $pbcTemplate)
+{
+    try {
+        \Log::info('=== getTemplateItems called ===', [
+            'template_id' => $pbcTemplate->id,
+            'template_name' => $pbcTemplate->name,
+            'is_active' => $pbcTemplate->is_active
+        ]);
+
+        // Check if template is active
+        if (!$pbcTemplate->is_active) {
+            \Log::warning('Template is not active', ['template_id' => $pbcTemplate->id]);
+            return response()->json([
+                'error' => 'Template is not active',
+                'debug_info' => [
+                    'template_id' => $pbcTemplate->id,
+                    'template_name' => $pbcTemplate->name,
+                    'is_active' => $pbcTemplate->is_active
+                ]
+            ], 400);
+        }
+
+        // Get items with detailed logging
+        $itemsQuery = $pbcTemplate->templateItems();
+        $itemsCount = $itemsQuery->count();
+
+        \Log::info('Template items query result', [
+            'template_id' => $pbcTemplate->id,
+            'items_count' => $itemsCount,
+            'sql_query' => $itemsQuery->toSql()
+        ]);
+
+        if ($itemsCount === 0) {
+            \Log::warning('No items found for template', [
+                'template_id' => $pbcTemplate->id,
+                'template_name' => $pbcTemplate->name
+            ]);
+
+            return response()->json([
+                'message' => 'No items found',
+                'data' => [],
+                'debug_info' => [
+                    'template_id' => $pbcTemplate->id,
+                    'template_name' => $pbcTemplate->name,
+                    'items_count' => $itemsCount,
+                    'query_sql' => $itemsQuery->toSql()
+                ]
+            ]);
+        }
+
+        $items = $itemsQuery
+            ->select('id', 'category', 'particulars', 'is_required', 'order_index')
             ->orderBy('order_index')
             ->get();
 
-        return response()->json($items);
-    }
+        \Log::info('Items retrieved successfully', [
+            'template_id' => $pbcTemplate->id,
+            'items_retrieved' => $items->count(),
+            'items_data' => $items->toArray()
+        ]);
 
+        return response()->json([
+            'success' => true,
+            'count' => $items->count(),
+            'data' => $items,
+            'debug_info' => [
+                'template_id' => $pbcTemplate->id,
+                'template_name' => $pbcTemplate->name,
+                'items_count' => $itemsCount,
+                'server_time' => now()->toDateTimeString()
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Exception in getTemplateItems', [
+            'template_id' => $pbcTemplate->id ?? 'unknown',
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'error' => 'Server error',
+            'message' => $e->getMessage(),
+            'debug_info' => [
+                'template_id' => $pbcTemplate->id ?? 'unknown',
+                'error_line' => $e->getLine(),
+                'error_file' => $e->getFile()
+            ]
+        ], 500);
+    }
+}
     // Toggle template active status
     public function toggleStatus(PbcTemplate $pbcTemplate)
     {
@@ -172,3 +254,4 @@ class PbcTemplateController extends Controller
             ->with('success', "Template {$status} successfully.");
     }
 }
+

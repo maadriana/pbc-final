@@ -22,7 +22,7 @@
 <h3>Required Documents</h3>
 <table class="table">
     <thead>
-        <tr><th>Category</th><th>Document Required</th><th>Status</th><th>Upload</th></tr>
+        <tr><th>Category</th><th>Document Required</th><th>Status</th><th>Upload/Files</th></tr>
     </thead>
     <tbody>
         @foreach($pbcRequest->items as $item)
@@ -30,24 +30,68 @@
             <td>{{ $item->category ?? 'General' }}</td>
             <td>{{ $item->particulars }}</td>
             <td>
-                <span class="badge bg-{{ $item->status == 'approved' ? 'success' : ($item->status == 'uploaded' ? 'warning' : 'secondary') }}">
-                    {{ ucfirst($item->status) }}
+                <span class="badge bg-{{
+                    $item->getCurrentStatus() == 'approved' ? 'success' :
+                    ($item->getCurrentStatus() == 'uploaded' ? 'warning' :
+                    ($item->getCurrentStatus() == 'rejected' ? 'danger' : 'secondary'))
+                }}">
+                    {{ ucfirst($item->getCurrentStatus()) }}
                 </span>
             </td>
             <td>
-                @if($item->status == 'pending' || $item->status == 'rejected')
-                    <form method="POST" action="{{ route('client.pbc-requests.upload', [$pbcRequest, $item]) }}" enctype="multipart/form-data" class="d-flex gap-2">
-                        @csrf
-                        <input type="file" name="file" class="form-control form-control-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.txt" required>
-                        <button type="submit" class="btn btn-sm btn-primary">Upload</button>
-                    </form>
-                @elseif($item->documents->count() > 0)
-                    @foreach($item->documents as $doc)
-                        <div class="small">
-                            <i class="fas fa-file"></i> {{ $doc->original_filename }}
-                            <span class="badge bg-{{ $doc->status == 'approved' ? 'success' : 'warning' }}">{{ $doc->status }}</span>
+                <!-- Show all uploaded documents for this item -->
+                @if($item->documents->count() > 0)
+                    @foreach($item->documents as $document)
+                        <div class="mb-2 p-2 border rounded">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="{{ \App\Helpers\FileHelper::getFileIcon($document->file_extension) }}"></i>
+                                    <a href="{{ route('documents.download', $document) }}" class="text-decoration-none">
+                                        {{ Str::limit($document->original_filename, 25) }}
+                                    </a>
+                                </div>
+                                <span class="badge bg-{{
+                                    $document->status == 'approved' ? 'success' :
+                                    ($document->status == 'rejected' ? 'danger' : 'warning')
+                                }}">
+                                    {{ ucfirst($document->status) }}
+                                </span>
+                            </div>
+                            @if($document->status == 'rejected' && $document->admin_notes)
+                                <small class="text-danger d-block mt-1">
+                                    <strong>Rejection reason:</strong> {{ $document->admin_notes }}
+                                </small>
+                            @elseif($document->status == 'approved')
+                                <small class="text-success d-block mt-1">
+                                    <i class="fas fa-check-circle"></i> Approved on {{ $document->approved_at->format('M d, Y') }}
+                                </small>
+                            @elseif($document->status == 'uploaded')
+                                <small class="text-warning d-block mt-1">
+                                    <i class="fas fa-clock"></i> Pending admin review
+                                </small>
+                            @endif
                         </div>
                     @endforeach
+                @endif
+
+                <!-- Always allow new uploads if item is not fully approved -->
+                @if($item->getCurrentStatus() !== 'approved')
+                    <form method="POST" action="{{ route('client.pbc-requests.upload', [$pbcRequest, $item]) }}" enctype="multipart/form-data" class="d-flex gap-2 mt-2">
+                        @csrf
+                        <input type="file" name="file" class="form-control form-control-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.txt" required>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            {{ $item->documents->count() > 0 ? 'Upload New Version' : 'Upload' }}
+                        </button>
+                    </form>
+                    @if($item->getCurrentStatus() == 'rejected')
+                        <small class="text-muted d-block mt-1">
+                            Please upload a new file to replace the rejected document(s).
+                        </small>
+                    @endif
+                @else
+                    <div class="text-success mt-2">
+                        <i class="fas fa-check-circle"></i> Document approved - No further uploads needed
+                    </div>
                 @endif
             </td>
         </tr>

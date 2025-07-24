@@ -102,20 +102,74 @@
                     </td>
                     <td>
                         @if($item->documents->count() > 0)
-                            @foreach($item->documents as $document)
-                                <div class="mb-1">
-                                    <i class="{{ \App\Helpers\FileHelper::getFileIcon($document->file_extension) }}"></i>
-                                    <a href="{{ route('documents.download', $document) }}" class="text-decoration-none">
-                                        {{ Str::limit($document->original_filename, 30) }}
-                                    </a>
-                                    <span class="badge bg-{{ $document->status == 'approved' ? 'success' : ($document->status == 'rejected' ? 'danger' : 'warning') }}">
-                                        {{ $document->status }}
-                                    </span>
+        @foreach($item->documents as $document)
+            <div class="mb-2 p-2 border">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="{{ \App\Helpers\FileHelper::getFileIcon($document->file_extension) }}"></i>
+                        <a href="{{ route('documents.download', $document) }}" class="text-decoration-none">
+                            {{ Str::limit($document->original_filename, 20) }}
+                        </a>
+                    </div>
+                    <span class="badge bg-{{ $document->status == 'approved' ? 'success' : ($document->status == 'rejected' ? 'danger' : 'warning') }}">
+                        {{ $document->status }}
+                    </span>
+                </div>
+
+                @if($document->status == 'uploaded')
+                    <div class="mt-2">
+                        <!-- Approve Button -->
+                        <form method="POST" action="{{ route('admin.pbc-requests.review-item', [$pbcRequest, $item]) }}" class="d-inline">
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="action" value="approve">
+                            <input type="hidden" name="document_id" value="{{ $document->id }}">
+                            <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                        </form>
+
+                        <!-- Reject Button -->
+                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $document->id }}">
+                            Reject
+                        </button>
+
+                        <!-- Reject Modal for this specific document -->
+                        <div class="modal fade" id="rejectModal{{ $document->id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form method="POST" action="{{ route('admin.pbc-requests.review-item', [$pbcRequest, $item]) }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="action" value="reject">
+                                        <input type="hidden" name="document_id" value="{{ $document->id }}">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Reject Document: {{ $document->original_filename }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Reason for rejection:</label>
+                                                <textarea name="admin_notes" class="form-control" rows="3" required placeholder="Explain why this document is being rejected..."></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-danger">Reject Document</button>
+                                        </div>
+                                    </form>
                                 </div>
-                            @endforeach
-                        @else
-                            <span class="text-muted">No files uploaded</span>
-                        @endif
+                            </div>
+                        </div>
+                    </div>
+                @elseif($document->status == 'rejected' && $document->admin_notes)
+                    <small class="text-danger d-block mt-1">{{ $document->admin_notes }}</small>
+                @elseif($document->status == 'approved')
+                    <small class="text-success d-block mt-1">Approved by {{ $document->approver->name }} on {{ $document->approved_at->format('M d, Y') }}</small>
+                @endif
+            </div>
+        @endforeach
+    @else
+        <span class="text-muted">No files uploaded</span>
+    @endif
                     </td>
                     <td>
                         @if($item->status == 'uploaded')

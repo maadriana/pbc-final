@@ -50,48 +50,72 @@ class PbcRequestController extends Controller
     }
 
     public function create()
-    {
-        $templates = PbcTemplate::where('is_active', true)->orderBy('name')->get();
-        $clients = Client::with('user')->orderBy('company_name')->get();
-        $projects = Project::where('status', 'active')->orderBy('name')->get();
+{
+    $templates = PbcTemplate::where('is_active', true)->orderBy('name')->get();
+    $clients = Client::with('user')->orderBy('company_name')->get();
+    $projects = Project::where('status', 'active')->orderBy('name')->get();
 
-        return view('admin.pbc-requests.create', compact('templates', 'clients', 'projects'));
+    // DEBUG: Log the templates being loaded
+    \Log::info('Templates loaded for create form:', [
+        'templates' => $templates->map(function($t) {
+            return [
+                'id' => $t->id,
+                'name' => $t->name,
+                'items_count' => $t->templateItems->count()
+            ];
+        })->toArray()
+    ]);
+
+    // Also dump to screen for debugging (remove after testing)
+    foreach($templates as $template) {
+        echo "Template ID: {$template->id}, Name: {$template->name}, Items: {$template->templateItems->count()}<br>";
     }
 
+    return view('admin.pbc-requests.create', compact('templates', 'clients', 'projects'));
+}
     public function store(StorePbcRequestRequest $request)
-    {
-        DB::transaction(function () use ($request) {
-            // Create PBC request
-            $pbcRequest = PbcRequest::create([
-                'template_id' => $request->template_id,
-                'client_id' => $request->client_id,
-                'project_id' => $request->project_id,
-                'title' => $request->title,
-                'description' => $request->description,
-                'header_info' => $request->header_info,
-                'due_date' => $request->due_date,
-                'created_by' => auth()->id(),
-            ]);
+{
+    // Debug the incoming request
+    \Log::info('PBC Request Store - Items received:', [
+        'items_count' => count($request->items ?? []),
+        'items' => $request->items
+    ]);
 
-            // Create request items
+    DB::transaction(function () use ($request) {
+        // Create PBC request
+        $pbcRequest = PbcRequest::create([
+            'template_id' => $request->template_id,
+            'client_id' => $request->client_id,
+            'project_id' => $request->project_id,
+            'title' => $request->title,
+            'description' => $request->description,
+            'header_info' => $request->header_info,
+            'due_date' => $request->due_date,
+            'created_by' => auth()->id(),
+        ]);
+
+        // Create request items - FIXED VERSION
+        if ($request->items && is_array($request->items)) {
             foreach ($request->items as $index => $item) {
-                PbcRequestItem::create([
-                    'pbc_request_id' => $pbcRequest->id,
-                    'category' => $item['category'] ?? null,
-                    'particulars' => $item['particulars'],
-                    'date_requested' => $item['date_requested'] ?? now()->toDateString(),
-                    'is_required' => $item['is_required'] ?? true,
-                    'remarks' => $item['remarks'] ?? null,
-                    'order_index' => $index,
-                ]);
+                if (isset($item['particulars']) && !empty(trim($item['particulars']))) {
+                    PbcRequestItem::create([
+                        'pbc_request_id' => $pbcRequest->id,
+                        'category' => $item['category'] ?? null,
+                        'particulars' => trim($item['particulars']),
+                        'date_requested' => $item['date_requested'] ?? now()->toDateString(),
+                        'is_required' => isset($item['is_required']) ? (bool)$item['is_required'] : true,
+                        'remarks' => $item['remarks'] ?? null,
+                        'order_index' => $index,
+                    ]);
+                }
             }
-        });
+        }
+    });
 
-        return redirect()
-            ->route('admin.pbc-requests.index')
-            ->with('success', 'PBC Request created successfully.');
-    }
-
+    return redirect()
+        ->route('admin.pbc-requests.index')
+        ->with('success', 'PBC Request created successfully.');
+}
     public function show(PbcRequest $pbcRequest)
     {
         $pbcRequest->load([
@@ -218,27 +242,50 @@ class PbcRequestController extends Controller
     {
         $request->validate([
             'action' => 'required|in:approve,reject',
-            'admin_notes' => 'nullable|string|max:500'
+            'admin_notes' => 'nullable|string|max:500',
+            'document_id' => 'required|exists:document_uploads,id'
         ]);
+
+        $document = DocumentUpload::findOrFail($request->document_id);
+
+        // Verify document belongs to this item
+        if ($document->pbc_request_item_id !== $item->id) {
+            abort(403, 'Document does not belong to this item.');
+        }
 
         $status = $request->action === 'approve' ? 'approved' : 'rejected';
 
-        DB::transaction(function () use ($item, $status, $request) {
-            // Update item status
-            $item->update([
-                'status' => $status,
-                'reviewed_at' => now(),
-                'reviewed_by' => auth()->id(),
-                'remarks' => $request->admin_notes ?? $item->remarks,
-            ]);
-
-            // Update document status
-            $item->documents()->update([
+        DB::transaction(function () use ($item, $document, $status, $request) {
+            // Update the specific document
+            $document->update([
                 'status' => $status,
                 'admin_notes' => $request->admin_notes,
                 'approved_at' => $status === 'approved' ? now() : null,
                 'approved_by' => auth()->id(),
             ]);
+
+            // Update item status and track approved document
+            if ($status === 'approved') {
+                $item->update([
+                    'status' => 'approved',
+                    'reviewed_at' => now(),
+                    'reviewed_by' => auth()->id(),
+                ]);
+            } else {
+                // If rejecting, check if there are other approved documents
+                $hasApprovedDocs = $item->documents()->where('status', 'approved')->exists();
+
+                if (!$hasApprovedDocs) {
+                    // No approved documents, update item status based on remaining documents
+                    $hasUploadedDocs = $item->documents()->where('status', 'uploaded')->exists();
+
+                    $item->update([
+                        'status' => $hasUploadedDocs ? 'uploaded' : 'rejected',
+                        'reviewed_at' => $hasUploadedDocs ? $item->reviewed_at : now(),
+                        'reviewed_by' => auth()->id(),
+                    ]);
+                }
+            }
         });
 
         // Check if all items are completed
@@ -247,20 +294,41 @@ class PbcRequestController extends Controller
         $action = $status === 'approved' ? 'approved' : 'rejected';
         return redirect()
             ->route('admin.pbc-requests.show', $pbcRequest)
-            ->with('success', "Document {$action} successfully.");
+            ->with('success', "Document '{$document->original_filename}' {$action} successfully.");
     }
 
-    // Update overall request status based on items
+    // Update overall request status based on items - FIXED VERSION
     private function updateRequestStatus(PbcRequest $pbcRequest)
     {
         $totalItems = $pbcRequest->items()->count();
-        $approvedItems = $pbcRequest->items()->where('status', 'approved')->count();
 
+        if ($totalItems === 0) {
+            return;
+        }
+
+        // Get all items and check their dynamic status
+        $items = $pbcRequest->items()->with('documents')->get();
+        $approvedItems = $items->filter(function ($item) {
+            return $item->getCurrentStatus() === 'approved';
+        })->count();
+
+        // Check if all items are approved
         if ($approvedItems === $totalItems) {
             $pbcRequest->update([
                 'status' => 'completed',
                 'completed_at' => now(),
             ]);
+        } else {
+            // Check if any items have been worked on
+            $hasActivity = $items->filter(function ($item) {
+                return in_array($item->getCurrentStatus(), ['uploaded', 'approved', 'rejected']);
+            })->count() > 0;
+
+            if ($hasActivity && $pbcRequest->status === 'pending') {
+                $pbcRequest->update([
+                    'status' => 'in_progress',
+                ]);
+            }
         }
     }
 }

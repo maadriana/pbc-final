@@ -49,13 +49,17 @@ class PbcRequest extends Model
 
     // Helper methods - ONLY ONE VERSION OF EACH
     public function getProgressPercentage()
-    {
-        $total = $this->items()->count();
-        if ($total === 0) return 0;
+{
+    $total = $this->items()->count();
+    if ($total === 0) return 0;
 
-        $completed = $this->items()->where('status', 'approved')->count();
-        return round(($completed / $total) * 100);
-    }
+    $completed = $this->items()->get()->filter(function ($item) {
+        return $item->getCurrentStatus() === 'approved';
+    })->count();
+
+    return round(($completed / $total) * 100);
+}
+
 
     public function isOverdue()
     {

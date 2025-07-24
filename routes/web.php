@@ -73,14 +73,18 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('progress', [AdminDashboardController::class, 'progress'])->name('progress');
 
     // API endpoints for dynamic loading
-Route::get('api/templates/{template}/items', [PbcTemplateController::class, 'getTemplateItems'])
+    Route::get('api/templates/{template}/items', [PbcTemplateController::class, 'getTemplateItems'])
     ->name('api.templates.items');
-Route::get('api/clients/{client}/projects', [ClientController::class, 'getClientProjects'])
+    Route::get('api/clients/{client}/projects', [ClientController::class, 'getClientProjects'])
     ->name('api.clients.projects');
-Route::post('api/pbc-requests/items/{item}/upload', [FileUploadController::class, 'upload'])
+    Route::post('api/pbc-requests/items/{item}/upload', [FileUploadController::class, 'upload'])
     ->name('api.pbc-requests.upload');
-Route::delete('api/documents/{document}', [FileUploadController::class, 'delete'])
+    Route::delete('api/documents/{document}', [FileUploadController::class, 'delete'])
     ->name('api.documents.delete');
+
+    Route::get('pbc-templates/{template}/items', [PbcTemplateController::class, 'getTemplateItems'])
+    ->name('pbc-templates.items');
+
 });
 
 // Client Routes
@@ -101,6 +105,25 @@ Route::middleware(['auth', 'client'])->prefix('client')->name('client.')->group(
 
     // Progress Tracking
     Route::get('progress', [ClientDashboardController::class, 'progress'])->name('progress');
+});
+Route::get('/debug/template/{id}', function($id) {
+    $template = \App\Models\PbcTemplate::find($id);
+
+    if (!$template) {
+        return response()->json(['error' => 'Template not found']);
+    }
+
+    $items = $template->templateItems()->get();
+
+    return response()->json([
+        'template' => [
+            'id' => $template->id,
+            'name' => $template->name,
+            'is_active' => $template->is_active
+        ],
+        'items_count' => $items->count(),
+        'items' => $items->toArray()
+    ]);
 });
 
 require __DIR__.'/auth.php';
