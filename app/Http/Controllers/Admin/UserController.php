@@ -4,16 +4,16 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Http\Requests\StoreUserRequest;
-use App\Http\Requests\UpdateUserRequest;
+use App\Models\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::query();
+        $query = User::with(['client']);
 
         // Search functionality
         if ($request->filled('search')) {
@@ -36,17 +36,53 @@ class UserController extends Controller
 
     public function create()
     {
+        // Check if user can create users (only system admin)
+        if (!auth()->user()->canCreateUsers()) {
+            abort(403, 'You do not have permission to create users.');
+        }
+
         return view('admin.users.create');
     }
 
-    public function store(StoreUserRequest $request)
+    public function store(Request $request)
     {
+        // Check if user can create users (only system admin)
+        if (!auth()->user()->canCreateUsers()) {
+            abort(403, 'You do not have permission to create users.');
+        }
+
+        // Validation with all valid roles
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+            'role' => [
+                'required',
+                Rule::in([
+                    User::ROLE_SYSTEM_ADMIN,
+                    User::ROLE_ENGAGEMENT_PARTNER,
+                    User::ROLE_MANAGER,
+                    User::ROLE_ASSOCIATE,
+                    User::ROLE_CLIENT
+                ])
+            ],
+        ]);
+
+        // Create the user
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
         ]);
+
+        // If creating a client user, also create client record
+        if ($request->role === User::ROLE_CLIENT) {
+            // Redirect to client creation page with the user_id
+            return redirect()
+                ->route('admin.clients.create', ['user_id' => $user->id])
+                ->with('success', 'Client user created. Please complete the client company information.');
+        }
 
         return redirect()
             ->route('admin.users.index')
@@ -55,7 +91,7 @@ class UserController extends Controller
 
     public function show(User $user)
     {
-        $user->load(['createdClients', 'createdProjects', 'uploadedDocuments']);
+        $user->load(['client', 'createdClients', 'createdProjects', 'uploadedDocuments']);
 
         return view('admin.users.show', compact('user'));
     }
@@ -65,9 +101,33 @@ class UserController extends Controller
         return view('admin.users.edit', compact('user'));
     }
 
-    public function update(UpdateUserRequest $request, User $user)
+    public function update(Request $request, User $user)
     {
-        $data = [
+        // Validation
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('users')->ignore($user->id),
+            ],
+            'role' => [
+                'required',
+                Rule::in([
+                    User::ROLE_SYSTEM_ADMIN,
+                    User::ROLE_ENGAGEMENT_PARTNER,
+                    User::ROLE_MANAGER,
+                    User::ROLE_ASSOCIATE,
+                    User::ROLE_CLIENT
+                ])
+            ],
+            'password' => 'nullable|string|min:8|confirmed',
+        ]);
+
+        // Update user data
+        $userData = [
             'name' => $request->name,
             'email' => $request->email,
             'role' => $request->role,
@@ -75,30 +135,35 @@ class UserController extends Controller
 
         // Only update password if provided
         if ($request->filled('password')) {
-            $data['password'] = Hash::make($request->password);
+            $userData['password'] = Hash::make($request->password);
         }
 
-        $user->update($data);
+        $user->update($userData);
 
         return redirect()
-            ->route('admin.users.index')
+            ->route('admin.users.show', $user)
             ->with('success', 'User updated successfully.');
     }
 
     public function destroy(User $user)
     {
-        // Prevent admin from deleting themselves
-        if ($user->id === auth()->id()) {
+        // Check if user has dependencies
+        if ($user->client) {
             return redirect()
                 ->route('admin.users.index')
-                ->with('error', 'You cannot delete your own account.');
+                ->with('error', 'Cannot delete user with associated client record.');
         }
 
-        // Check if user has related data
-        if ($user->createdClients()->count() > 0 || $user->createdProjects()->count() > 0) {
+        if ($user->createdClients()->count() > 0) {
             return redirect()
                 ->route('admin.users.index')
-                ->with('error', 'Cannot delete user with associated clients or projects.');
+                ->with('error', 'Cannot delete user who has created client records.');
+        }
+
+        if ($user->createdProjects()->count() > 0) {
+            return redirect()
+                ->route('admin.users.index')
+                ->with('error', 'Cannot delete user who has created projects.');
         }
 
         $user->delete();

@@ -22,6 +22,18 @@ class PbcRequestItem extends Model
         'reviewed_at' => 'datetime',
     ];
 
+    // NEW: Category constants for wireframe alignment
+    const CATEGORY_CURRENT_FILE = 'CF';
+    const CATEGORY_PERMANENT_FILE = 'PF';
+
+    public static function getCategories()
+    {
+        return [
+            self::CATEGORY_CURRENT_FILE => 'Current File',
+            self::CATEGORY_PERMANENT_FILE => 'Permanent File',
+        ];
+    }
+
     // Relationships
     public function pbcRequest()
     {
@@ -127,5 +139,155 @@ class PbcRequestItem extends Model
             'rejected' => 'Rejected',
             default => 'Unknown',
         };
+    }
+
+    // NEW: Helper methods for category display
+    public function getCategoryDisplayAttribute()
+    {
+        return self::getCategories()[$this->category] ?? $this->category;
+    }
+
+    public function getCategoryColorClass()
+    {
+        return match($this->category) {
+            self::CATEGORY_CURRENT_FILE => 'badge-primary',
+            self::CATEGORY_PERMANENT_FILE => 'badge-secondary',
+            default => 'badge-light'
+        };
+    }
+
+    public function getCategoryIconClass()
+    {
+        return match($this->category) {
+            self::CATEGORY_CURRENT_FILE => 'fas fa-file',
+            self::CATEGORY_PERMANENT_FILE => 'fas fa-folder',
+            default => 'fas fa-file-alt'
+        };
+    }
+
+    // NEW: Scope for filtering by category
+    public function scopeCurrentFile($query)
+    {
+        return $query->where('category', self::CATEGORY_CURRENT_FILE);
+    }
+
+    public function scopePermanentFile($query)
+    {
+        return $query->where('category', self::CATEGORY_PERMANENT_FILE);
+    }
+
+    public function scopeByCategory($query, $category)
+    {
+        return $query->where('category', $category);
+    }
+
+    // NEW: Wireframe-specific helper methods
+    public function getRequestorAttribute()
+    {
+        // For wireframe compatibility - return the person who created the PBC request
+        return $this->pbcRequest->creator->name ?? 'MNGR 1';
+    }
+
+    public function getAssignedToAttribute()
+    {
+        // For wireframe - return who this is assigned to (usually client staff)
+        return $this->pbcRequest->client->contact_person ?? 'Client Staff 1';
+    }
+
+    public function getDateRequestedFormattedAttribute()
+    {
+        return $this->date_requested?->format('d/m/Y') ?? now()->format('d/m/Y');
+    }
+
+    public function getDueDateAttribute()
+    {
+        return $this->pbcRequest->due_date;
+    }
+
+    public function getDueDateFormattedAttribute()
+    {
+        return $this->due_date?->format('d/m/Y') ?? '';
+    }
+
+    // NEW: Get progress percentage for this item
+    public function getProgressPercentage()
+    {
+        return match($this->getCurrentStatus()) {
+            'pending' => 0,
+            'uploaded' => 50,
+            'rejected' => 25,
+            'approved' => 100,
+            default => 0,
+        };
+    }
+
+    // NEW: Check if item is overdue
+    public function isOverdue()
+    {
+        return $this->due_date &&
+               $this->due_date->isPast() &&
+               $this->getCurrentStatus() !== 'approved';
+    }
+
+    // NEW: Get days outstanding
+    public function getDaysOutstanding()
+    {
+        if (!$this->date_requested) {
+            return 0;
+        }
+
+        return $this->date_requested->diffInDays(now());
+    }
+
+    // NEW: Get display status for wireframe
+    public function getDisplayStatus()
+    {
+        if ($this->isOverdue()) {
+            return 'overdue';
+        }
+
+        return $this->getCurrentStatus();
+    }
+
+    // NEW: Get status color for wireframe
+    public function getWireframeStatusColor()
+    {
+        return match($this->getDisplayStatus()) {
+            'pending' => '#6c757d',      // Gray
+            'uploaded' => '#ffc107',     // Yellow
+            'approved' => '#28a745',     // Green
+            'rejected' => '#dc3545',     // Red
+            'overdue' => '#dc3545',      // Red
+            default => '#6c757d',
+        };
+    }
+
+    // NEW: Get actions available for this item
+    public function getAvailableActions()
+    {
+        $actions = [];
+        $status = $this->getCurrentStatus();
+
+        if ($status === 'uploaded') {
+            $actions[] = 'approve';
+            $actions[] = 'reject';
+        }
+
+        if (in_array($status, ['pending', 'rejected'])) {
+            $actions[] = 'upload';
+        }
+
+        if ($status === 'approved') {
+            $actions[] = 'view';
+            $actions[] = 'download';
+        }
+
+        return $actions;
+    }
+
+    // NEW: Get note/remarks for wireframe
+    public function getNoteAttribute()
+    {
+        return $this->remarks ?? 'Insert text';
     }
 }

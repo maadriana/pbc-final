@@ -75,6 +75,28 @@
         font-size: 0.85rem;
     }
 
+    /* Reminder badge styles */
+    .reminder-badge {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background-color: #dc3545;
+        color: white;
+        border-radius: 50%;
+        padding: 2px 6px;
+        font-size: 0.7rem;
+        font-weight: bold;
+        min-width: 18px;
+        text-align: center;
+        animation: pulse-badge 2s infinite;
+    }
+
+    @keyframes pulse-badge {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+
     /* Sidebar */
     .sidebar {
         position: fixed;
@@ -104,6 +126,7 @@
         display: flex;
         align-items: center;
         transition: background 0.2s, color 0.2s;
+        position: relative;
     }
 
     .nav-link i {
@@ -145,29 +168,45 @@
         height: 100%;
         margin-top: 0;
     }
+
+    /* Styles for custom sections */
+    @yield('styles')
 </style>
 
 </head>
 <body>
 
     {{-- Navbar --}}
-<nav class="navbar navbar-expand-lg shadow-sm">
-    <div class="container-fluid px-4">
-        <a class="navbar-brand d-flex align-items-center gap-3 me-auto" href="#" style="padding: 0;">
-    <img src="{{ asset('images/mtco-logo.png') }}" alt="PBC Logo" class="logo-img">
-    <span class="fw-bold brand-title">PBC Checklist System</span>
-</a>
-        <div class="navbar-nav ms-auto align-items-center">
-    @auth
-        <span class="navbar-text me-3 text-dark">
-    Welcome! {{ auth()->user()->name }} ({{ ucfirst(auth()->user()->role) }})
-</span>
-        <form method="POST" action="{{ route('logout') }}" class="d-inline">
-            @csrf
-            <button class="btn btn-danger btn-sm">Logout</button>
-        </form>
-    @endauth
-</div>
+    <nav class="navbar navbar-expand-lg shadow-sm">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center gap-3 me-auto" href="#" style="padding: 0;">
+                <img src="{{ asset('images/mtco-logo.png') }}" alt="PBC Logo" class="logo-img">
+                <span class="fw-bold brand-title">PBC Checklist System</span>
+            </a>
+            <div class="navbar-nav ms-auto align-items-center">
+                @auth
+                    {{-- Reminder Bell for Clients --}}
+                    @if(auth()->user()->isClient())
+                        <div class="me-3 position-relative">
+                            <a href="{{ route('client.reminders.index') }}" class="btn btn-outline-secondary btn-sm position-relative">
+                                <i class="fas fa-bell"></i>
+                                <span id="navbar-reminder-badge" class="reminder-badge" style="display: none;">
+                                    <span id="navbar-reminder-count">0</span>
+                                </span>
+                            </a>
+                        </div>
+                    @endif
+
+                    <span class="navbar-text me-3 text-dark">
+                        Welcome! {{ auth()->user()->name }} ({{ auth()->user()->getRoleDisplayName() }})
+                    </span>
+                    <form method="POST" action="{{ route('logout') }}" class="d-inline">
+                        @csrf
+                        <button class="btn btn-danger btn-sm">Logout</button>
+                    </form>
+                @endauth
+            </div>
+        </div>
     </nav>
 
     {{-- Layout --}}
@@ -196,16 +235,20 @@
 
             <h6>Management</h6>
             <ul class="nav flex-column px-3">
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}">
-                        <i class="fas fa-users me-2"></i>Users
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('admin.clients.*') ? 'active' : '' }}" href="{{ route('admin.clients.index') }}">
-                        <i class="fas fa-user-tie me-2"></i>Clients
-                    </a>
-                </li>
+                @if(auth()->user()->canCreateUsers())
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}">
+                            <i class="fas fa-users me-2"></i>Users
+                        </a>
+                    </li>
+                @endif
+                @if(auth()->user()->canManageClients())
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('admin.clients.*') ? 'active' : '' }}" href="{{ route('admin.clients.index') }}">
+                            <i class="fas fa-user-tie me-2"></i>Clients
+                        </a>
+                    </li>
+                @endif
                 <li class="nav-item">
                     <a class="nav-link {{ request()->routeIs('admin.projects.*') ? 'active' : '' }}" href="{{ route('admin.projects.index') }}">
                         <i class="fas fa-briefcase me-2"></i>Projects
@@ -261,6 +304,14 @@
                         <i class="fas fa-folder-open me-2"></i>Documents
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->routeIs('client.reminders.*') ? 'active' : '' }} position-relative" href="{{ route('client.reminders.index') }}">
+                        <i class="fas fa-bell me-2"></i>Reminders
+                        <span id="sidebar-reminder-badge" class="reminder-badge" style="display: none;">
+                            <span id="sidebar-reminder-count">0</span>
+                        </span>
+                    </a>
+                </li>
             </ul>
 
         @endif
@@ -289,6 +340,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+
     @yield('scripts')
 
 </body>
