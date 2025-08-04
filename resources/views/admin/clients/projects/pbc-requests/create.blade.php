@@ -162,90 +162,13 @@
         </div>
     </div>
 
-    <!-- Additional Details -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header">
-                    <h6 class="mb-0">Request Details</h6>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold" for="title">Request Title</label>
-                        <input type="text" id="title" name="title" class="form-control @error('title') is-invalid @enderror"
-                               value="{{ old('title', $project->engagement_name ?? 'Statutory audit for YE122024') }}" required>
-                        @error('title')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold" for="description">Description</label>
-                        <textarea id="description" name="description" class="form-control @error('description') is-invalid @enderror" rows="3"
-                                  placeholder="Optional description for this request...">{{ old('description') }}</textarea>
-                        @error('description')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold" for="due_date">Due Date</label>
-                        <input type="date" id="due_date" name="due_date" class="form-control @error('due_date') is-invalid @enderror" value="{{ old('due_date') }}">
-                        @error('due_date')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header">
-                    <h6 class="mb-0">Summary</h6>
-                </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-4">
-                            <div class="border-end">
-                                <h5 class="text-primary mb-0" id="total-items">1</h5>
-                                <small class="text-muted">Total Items</small>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="border-end">
-                                <h5 class="text-warning mb-0" id="required-items">1</h5>
-                                <small class="text-muted">Required</small>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <h5 class="text-info mb-0" id="optional-items">0</h5>
-                            <small class="text-muted">Optional</small>
-                        </div>
-                    </div>
-
-                    <hr>
-
-                    <div class="mb-3">
-                        <strong>Categories:</strong>
-                        <div class="mt-2">
-                            <span class="badge bg-secondary me-2" id="pf-count">PF: 1</span>
-                            <span class="badge bg-primary" id="cf-count">CF: 0</span>
-                        </div>
-                    </div>
-
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i>
-                        <small>This request will be sent to {{ $client->company_name }} for document submission.</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Hidden fields -->
+    <!-- Hidden fields for backend processing -->
     <input type="hidden" name="client_id" value="{{ $client->id }}">
     <input type="hidden" name="project_id" value="{{ $project->id }}">
+    <!-- Hidden fields to maintain backend compatibility -->
+    <input type="hidden" name="title" value="{{ $project->engagement_name ?? 'Statutory audit for YE122024' }}">
+    <input type="hidden" name="description" value="">
+    <input type="hidden" name="due_date" value="">
 
 </form>
 
@@ -298,16 +221,12 @@
     border-bottom: 1px solid #f1f3f4;
 }
 
-
-
 /* Button styling */
 .btn {
     font-weight: 500;
     border-radius: 0.375rem;
     transition: all 0.2s ease;
 }
-
-
 
 .btn-group-sm .btn {
     padding: 0.25rem 0.5rem;
@@ -689,42 +608,10 @@ function addTemplateItem(item, index) {
     tbody.appendChild(newRow);
 }
 
-// Update summary function
+// Update summary function (simplified since visual summary is removed)
 function updateSummary() {
     const rows = document.querySelectorAll('.request-item-row');
-    let totalItems = rows.length;
-    let requiredItems = 0;
-    let pfCount = 0;
-    let cfCount = 0;
-
-    rows.forEach(row => {
-        const categorySelect = row.querySelector('select[name*="[category]"]');
-        const requiredCheckbox = row.querySelector('input[name*="[is_required]"]');
-
-        if (categorySelect && requiredCheckbox) {
-            const category = categorySelect.value;
-            const isRequired = requiredCheckbox.checked;
-
-            if (category === 'PF') pfCount++;
-            if (category === 'CF') cfCount++;
-            if (isRequired) requiredItems++;
-        }
-    });
-
-    const optionalItems = totalItems - requiredItems;
-
-    // Update summary display
-    const totalElement = document.getElementById('total-items');
-    const requiredElement = document.getElementById('required-items');
-    const optionalElement = document.getElementById('optional-items');
-    const pfElement = document.getElementById('pf-count');
-    const cfElement = document.getElementById('cf-count');
-
-    if (totalElement) totalElement.textContent = totalItems;
-    if (requiredElement) requiredElement.textContent = requiredItems;
-    if (optionalElement) optionalElement.textContent = optionalItems;
-    if (pfElement) pfElement.textContent = `PF: ${pfCount}`;
-    if (cfElement) cfElement.textContent = `CF: ${cfCount}`;
+    console.log(`Summary updated: ${rows.length} items`);
 }
 
 // ENHANCED Validate form function
@@ -739,16 +626,6 @@ function validateForm() {
     if (rows.length === 0) {
         errorMessages.push('At least one request item is required.');
         isValid = false;
-    }
-
-    // Check title field
-    const title = document.querySelector('input[name="title"]');
-    if (title && !title.value.trim()) {
-        title.classList.add('is-invalid');
-        errorMessages.push('Request title is required.');
-        isValid = false;
-    } else if (title) {
-        title.classList.remove('is-invalid');
     }
 
     // Validate each request item

@@ -7,10 +7,10 @@
     <h1 class="mb-0 fs-2 fw-semibold text-dark">Progress Tracking</h1>
 </div>
 
-<!-- Stats Cards Section - Horizontal Layout matching wireframe -->
+<!-- Stats Cards Section -->
 <div class="row g-3 mb-4">
     <div class="col">
-        <div class="card border-0 shadow-sm h-100 text-white" style="background: linear-gradient(135deg, #1e3a8a, #3b82f6);">
+        <div class="card border-0 shadow-sm h-100 bg-primary text-white">
             <div class="card-body text-center py-4">
                 <div class="display-6 fw-bold mb-2">{{ $stats['total_requests'] ?? 0 }}</div>
                 <div class="small opacity-90">Total Request</div>
@@ -18,23 +18,23 @@
         </div>
     </div>
     <div class="col">
-        <div class="card border-0 shadow-sm h-100 text-white" style="background: linear-gradient(135deg, #374151, #6b7280);">
+        <div class="card border-0 shadow-sm h-100 bg-warning text-dark">
             <div class="card-body text-center py-4">
                 <div class="display-6 fw-bold mb-2">{{ $stats['pending'] ?? 0 }}</div>
-                <div class="small opacity-90">Pending</div>
+                <div class="small">Pending</div>
             </div>
         </div>
     </div>
     <div class="col">
-        <div class="card border-0 shadow-sm h-100 text-white" style="background: linear-gradient(135deg, #d97706, #f59e0b);">
+        <div class="card border-0 shadow-sm h-100 bg-warning text-dark">
             <div class="card-body text-center py-4">
                 <div class="display-6 fw-bold mb-2">{{ $stats['pending_review'] ?? 0 }}</div>
-                <div class="small opacity-90">Pending Review</div>
+                <div class="small">Pending Review</div>
             </div>
         </div>
     </div>
     <div class="col">
-        <div class="card border-0 shadow-sm h-100 text-white" style="background: linear-gradient(135deg, #dc2626, #ef4444);">
+        <div class="card border-0 shadow-sm h-100 bg-danger text-white">
             <div class="card-body text-center py-4">
                 <div class="display-6 fw-bold mb-2">{{ $stats['overdue'] ?? 0 }}</div>
                 <div class="small opacity-90">Overdue</div>
@@ -42,7 +42,7 @@
         </div>
     </div>
     <div class="col">
-        <div class="card border-0 shadow-sm h-100 text-white" style="background: linear-gradient(135deg, #059669, #10b981);">
+        <div class="card border-0 shadow-sm h-100 bg-success text-white">
             <div class="card-body text-center py-4">
                 <div class="display-6 fw-bold mb-2">{{ $stats['completed'] ?? 0 }}</div>
                 <div class="small opacity-90">Completed</div>
@@ -90,19 +90,19 @@
                         @endphp
 
                         @if($displayStatus === 'completed')
-                            <span class="badge rounded-pill px-3 py-2" style="background-color: #d1fae5; color: #065f46;">
+                            <span class="badge bg-success px-3 py-2">
                                 COMPLETED
                             </span>
                         @elseif($displayStatus === 'in_progress')
-                            <span class="badge rounded-pill px-3 py-2" style="background-color: #fef3c7; color: #92400e;">
+                            <span class="badge bg-warning px-3 py-2">
                                 IN PROGRESS
                             </span>
                         @elseif($displayStatus === 'overdue')
-                            <span class="badge rounded-pill px-3 py-2" style="background-color: #fecaca; color: #991b1b;">
+                            <span class="badge bg-danger px-3 py-2">
                                 OVERDUE
                             </span>
                         @else
-                            <span class="badge rounded-pill px-3 py-2" style="background-color: #f3f4f6; color: #374151;">
+                            <span class="badge bg-warning px-3 py-2">
                                 PENDING
                             </span>
                         @endif
@@ -115,8 +115,8 @@
                         @endphp
                         <div class="d-flex align-items-center">
                             <div class="progress me-3" style="width: 100px; height: 8px; background-color: #e5e7eb;">
-                                <div class="progress-bar"
-                                     style="background-color: #10b981; width: {{ $progressPercentage }}%;">
+                                <div class="progress-bar bg-success"
+                                     style="width: {{ $progressPercentage }}%;">
                                 </div>
                             </div>
                             <small class="text-muted">{{ $progressPercentage }}%</small>
@@ -163,18 +163,10 @@
 
 @section('styles')
 <style>
-/* Custom styles to match wireframe */
+/* Display sizing */
 .display-6 {
     font-size: 2.5rem;
     font-weight: 700;
-}
-
-.card-body {
-    transition: transform 0.2s ease;
-}
-
-.card:hover .card-body {
-    transform: translateY(-2px);
 }
 
 .table th {
@@ -189,10 +181,6 @@
     border-bottom: 1px solid #f1f3f4;
 }
 
-.table tbody tr:hover {
-    background-color: #f8f9fa;
-}
-
 .progress {
     border-radius: 4px;
     overflow: hidden;
@@ -200,16 +188,16 @@
 
 .progress-bar {
     border-radius: 4px;
-    transition: width 0.6s ease;
 }
 
 .badge {
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.5px;
+    border-radius: 0.375rem;
 }
 
-/* Stats cards animation */
+/* Animation for numbers */
 @keyframes countUp {
     from {
         opacity: 0;
@@ -239,12 +227,6 @@
         padding-left: 1rem !important;
         padding-right: 1rem !important;
     }
-}
-
-/* Link hover effects */
-.text-primary:hover {
-    color: #0056b3 !important;
-    text-decoration: underline !important;
 }
 
 /* Empty state styling */
@@ -279,19 +261,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 30);
         });
     }, 300);
-
-    // Add hover effects to table rows
-    const tableRows = document.querySelectorAll('tbody tr');
-    tableRows.forEach(row => {
-        row.addEventListener('mouseenter', function() {
-            this.style.transform = 'scale(1.01)';
-            this.style.transition = 'transform 0.2s ease';
-        });
-
-        row.addEventListener('mouseleave', function() {
-            this.style.transform = 'scale(1)';
-        });
-    });
 
     // Progress bar animation
     const progressBars = document.querySelectorAll('.progress-bar');

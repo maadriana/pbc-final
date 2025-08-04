@@ -40,6 +40,11 @@
 <form id="project-form" method="POST" action="{{ route('admin.projects.store') }}">
     @csrf
 
+    <!-- Hidden field to auto-set name from engagement_name -->
+    <input type="hidden" name="name" id="hidden-name" value="{{ old('engagement_name') }}">
+    <!-- Hidden field for description since we removed it from UI -->
+    <input type="hidden" name="description" value="">
+
     <!-- Main Project Details Card -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
@@ -199,14 +204,14 @@
         </div>
     </div>
 
-    <!-- Additional Project Details -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header">
-                    <h6 class="mb-0">Project Timeline</h6>
-                </div>
-                <div class="card-body">
+    <!-- Project Timeline Card (Full Width) -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Project Timeline</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
                     <div class="mb-3">
                         <label class="form-label fw-bold">Start Date</label>
                         <input type="date"
@@ -215,7 +220,8 @@
                                value="{{ old('start_date') }}">
                         @error('start_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-
+                </div>
+                <div class="col-md-3">
                     <div class="mb-3">
                         <label class="form-label fw-bold">End Date</label>
                         <input type="date"
@@ -224,7 +230,8 @@
                                value="{{ old('end_date') }}">
                         @error('end_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-
+                </div>
+                <div class="col-md-3">
                     <div class="mb-3">
                         <label class="form-label fw-bold">Status</label>
                         <select name="status" class="form-select @error('status') is-invalid @enderror" required>
@@ -236,37 +243,8 @@
                         @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header">
-                    <h6 class="mb-0">Project Details</h6>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Project Name <span class="text-danger">*</span></label>
-                        <input type="text"
-                               name="name"
-                               class="form-control @error('name') is-invalid @enderror"
-                               value="{{ old('name') }}"
-                               placeholder="Internal project name"
-                               required>
-                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        <div class="form-text">This is for internal reference and can be different from engagement name</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Description</label>
-                        <textarea name="description"
-                                  class="form-control @error('description') is-invalid @enderror"
-                                  rows="3"
-                                  placeholder="Optional project description...">{{ old('description') }}</textarea>
-                        @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-
-                    <div class="alert alert-success">
+                <div class="col-md-3">
+                    <div class="alert alert-success mb-0">
                         <i class="fas fa-check-circle"></i>
                         <small><strong>Next Steps:</strong> After creating this project, you can create PBC requests and manage documents.</small>
                     </div>
@@ -581,10 +559,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialize all form event listeners
 function initializeFormListeners() {
-    // Engagement name preview
+    // Engagement name preview and sync with hidden name field
     const engagementNameField = document.querySelector('input[name="engagement_name"]');
     if (engagementNameField) {
-        engagementNameField.addEventListener('input', updatePreview);
+        engagementNameField.addEventListener('input', function() {
+            updatePreview();
+            // ADDED: Sync engagement name with hidden name field
+            const hiddenNameField = document.getElementById('hidden-name');
+            if (hiddenNameField) {
+                hiddenNameField.value = this.value;
+            }
+        });
     }
 
     // Engagement type preview

@@ -4,7 +4,7 @@
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h1 class="mb-1">CREATE CLIENT</h1>
+        <h1 class="mb-1">Create Client</h1>
         <p class="text-muted mb-0">Add new client to the system</p>
     </div>
     <div>
@@ -19,6 +19,11 @@
     <div class="card-body p-4">
         <form method="POST" action="{{ route('admin.clients.store') }}" id="client-form">
             @csrf
+
+            <!-- Hidden fields for backend compatibility -->
+            <input type="hidden" id="name" name="name" value="">
+            <input type="hidden" id="password" name="password" value="">
+            <input type="hidden" name="password_confirmation" value="">
 
             <!-- Basic Company Information -->
             <div class="row g-4 mb-4">
@@ -167,81 +172,6 @@
                            value="{{ old('email_2') }}"
                            placeholder="contact2@company.com">
                     @error('email_2')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
-            </div>
-
-            <!-- Login Credentials Section -->
-            <hr class="my-4">
-            <div class="row g-4 mb-4">
-                <div class="col-12">
-                    <h5 class="text-primary mb-3">
-                        <i class="fas fa-key"></i> Login Credentials
-                    </h5>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>Note:</strong> These credentials will be used by the client to access the system.
-                        The system will create a user account using the primary contact person's name and email.
-                    </div>
-                </div>
-
-                <div class="col-md-6">
-                    <label for="name" class="form-label fw-bold">
-                        Full Name <span class="text-danger">*</span>
-                    </label>
-                    <input type="text"
-                           id="name"
-                           name="name"
-                           class="form-control @error('name') is-invalid @enderror"
-                           value="{{ old('name') }}"
-                           required
-                           placeholder="User's full name for login">
-                    @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    <div class="form-text">This will be auto-filled from Contact Person 1</div>
-                </div>
-
-                <div class="col-md-6">
-                    <label for="password" class="form-label fw-bold">
-                        Password <span class="text-danger">*</span>
-                    </label>
-                    <div class="input-group">
-                        <input type="password"
-                               id="password"
-                               name="password"
-                               class="form-control @error('password') is-invalid @enderror"
-                               required
-                               minlength="8"
-                               placeholder="Enter secure password">
-                        <button type="button" class="btn btn-outline-secondary" id="toggle-password">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                    </div>
-                    @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    <div class="form-text">Minimum 8 characters required</div>
-                </div>
-            </div>
-
-            <div class="row g-4 mb-4">
-                <div class="col-md-6">
-                    <label for="password_confirmation" class="form-label fw-bold">
-                        Confirm Password <span class="text-danger">*</span>
-                    </label>
-                    <input type="password"
-                           id="password_confirmation"
-                           name="password_confirmation"
-                           class="form-control @error('password_confirmation') is-invalid @enderror"
-                           required
-                           placeholder="Confirm password">
-                    @error('password_confirmation')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">Account Status</label>
-                    <div class="form-control-plaintext">
-                        <span class="badge bg-success fs-6">
-                            <i class="fas fa-check-circle"></i> Active
-                        </span>
-                        <small class="text-muted ms-2">Client will be able to login immediately</small>
-                    </div>
                 </div>
             </div>
 
@@ -462,29 +392,6 @@ hr {
     background-color: #f8f9fa;
     border-color: #e9ecef;
 }
-
-/* Password strength indicator */
-.password-strength {
-    height: 4px;
-    border-radius: 2px;
-    margin-top: 0.25rem;
-    transition: all 0.3s ease;
-}
-
-.password-strength.weak {
-    background-color: #dc3545;
-    width: 33%;
-}
-
-.password-strength.medium {
-    background-color: #ffc107;
-    width: 66%;
-}
-
-.password-strength.strong {
-    background-color: #28a745;
-    width: 100%;
-}
 </style>
 @endsection
 
@@ -493,65 +400,46 @@ hr {
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('client-form');
     const saveBtn = document.getElementById('save-btn');
-    const togglePasswordBtn = document.getElementById('toggle-password');
-    const passwordInput = document.getElementById('password');
-    const confirmPasswordInput = document.getElementById('password_confirmation');
     const contactPerson1Input = document.getElementById('contact_person_1');
     const nameInput = document.getElementById('name');
+    const passwordInput = document.getElementById('password');
     const email1Input = document.getElementById('email_1');
 
-    // Auto-fill name from contact person 1
+    // Auto-populate hidden fields for backend compatibility
     contactPerson1Input.addEventListener('input', function() {
-        if (this.value && !nameInput.value) {
-            nameInput.value = this.value;
-        }
+        // Set name field to contact person 1 name
+        nameInput.value = this.value;
     });
 
-    // Password visibility toggle
-    togglePasswordBtn.addEventListener('click', function() {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
+    email1Input.addEventListener('input', function() {
+        // Generate a default password based on company name and email
+        const companyName = document.getElementById('company_name').value || 'client';
+        const defaultPassword = generateDefaultPassword(companyName);
+        passwordInput.value = defaultPassword;
 
-        const icon = this.querySelector('i');
-        icon.classList.toggle('fa-eye');
-        icon.classList.toggle('fa-eye-slash');
-    });
-
-    // Password strength indicator
-    passwordInput.addEventListener('input', function() {
-        const password = this.value;
-        const strengthBar = document.getElementById('password-strength');
-
-        if (!strengthBar) {
-            // Create strength bar if it doesn't exist
-            const strengthDiv = document.createElement('div');
-            strengthDiv.id = 'password-strength';
-            strengthDiv.className = 'password-strength';
-            this.parentNode.appendChild(strengthDiv);
-        }
-
-        const strength = calculatePasswordStrength(password);
-        updatePasswordStrength(strength);
-    });
-
-    // Password confirmation validation
-    confirmPasswordInput.addEventListener('input', function() {
-        const password = passwordInput.value;
-        const confirmPassword = this.value;
-
-        if (confirmPassword && password !== confirmPassword) {
-            this.classList.add('is-invalid');
-            this.classList.remove('is-valid');
-        } else if (confirmPassword) {
-            this.classList.add('is-valid');
-            this.classList.remove('is-invalid');
-        }
+        // Set password confirmation to the same value
+        const passwordConfirmation = document.querySelector('input[name="password_confirmation"]');
+        passwordConfirmation.value = defaultPassword;
     });
 
     // Form validation
     form.addEventListener('submit', function(e) {
         let isValid = true;
         const requiredFields = form.querySelectorAll('input[required]');
+
+        // Ensure hidden fields are populated
+        if (!nameInput.value && contactPerson1Input.value) {
+            nameInput.value = contactPerson1Input.value;
+        }
+
+        if (!passwordInput.value) {
+            const companyName = document.getElementById('company_name').value || 'client';
+            const defaultPassword = generateDefaultPassword(companyName);
+            passwordInput.value = defaultPassword;
+
+            const passwordConfirmation = document.querySelector('input[name="password_confirmation"]');
+            passwordConfirmation.value = defaultPassword;
+        }
 
         // Check required fields
         requiredFields.forEach(field => {
@@ -563,12 +451,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 field.classList.add('is-valid');
             }
         });
-
-        // Check password match
-        if (passwordInput.value !== confirmPasswordInput.value) {
-            confirmPasswordInput.classList.add('is-invalid');
-            isValid = false;
-        }
 
         // Check email format
         const emailFields = form.querySelectorAll('input[type="email"]');
@@ -669,37 +551,14 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function() {
         localStorage.removeItem(draftKey);
     });
-
-    // Load draft on page load (uncomment if needed)
-    // loadDraft();
 });
 
 // Helper functions
-function calculatePasswordStrength(password) {
-    let strength = 0;
-
-    if (password.length >= 8) strength++;
-    if (/[a-z]/.test(password)) strength++;
-    if (/[A-Z]/.test(password)) strength++;
-    if (/[0-9]/.test(password)) strength++;
-    if (/[^A-Za-z0-9]/.test(password)) strength++;
-
-    return strength;
-}
-
-function updatePasswordStrength(strength) {
-    const strengthBar = document.getElementById('password-strength');
-    if (!strengthBar) return;
-
-    strengthBar.className = 'password-strength';
-
-    if (strength <= 2) {
-        strengthBar.classList.add('weak');
-    } else if (strength <= 4) {
-        strengthBar.classList.add('medium');
-    } else {
-        strengthBar.classList.add('strong');
-    }
+function generateDefaultPassword(companyName) {
+    // Generate a simple default password based on company name
+    const cleanName = companyName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const randomNum = Math.floor(Math.random() * 999) + 100;
+    return cleanName.substring(0, 5) + randomNum + '!';
 }
 
 function isValidEmail(email) {

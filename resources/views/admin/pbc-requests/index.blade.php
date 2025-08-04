@@ -2,6 +2,7 @@
 @section('title', 'PBC Request List')
 
 @section('content')
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="mb-1">PBC Request List</h1>
@@ -194,59 +195,104 @@
                             <!-- Actions -->
                             <td class="py-3">
                                 <div class="btn-group" role="group">
-                                    @if($currentStatus === 'uploaded')
-                                        <!-- Approve Action -->
-                                        <form method="POST" action="{{ route('admin.pbc-requests.review-item', [$request, $item]) }}" class="d-inline">
-                                            @csrf @method('PATCH')
-                                            <input type="hidden" name="action" value="approve">
-                                            @if($item->documents->where('status', 'uploaded')->first())
-                                                <input type="hidden" name="document_id" value="{{ $item->documents->where('status', 'uploaded')->first()->id }}">
-                                            @endif
-                                            <button type="submit" class="btn btn-sm btn-success" title="Approve">
-                                                Approve
-                                            </button>
-                                        </form>
-                                    @elseif($currentStatus === 'approved')
-                                        <!-- View/Download Action -->
-                                        @if($item->documents->where('status', 'approved')->first())
-                                            <a href="{{ route('documents.download', $item->documents->where('status', 'approved')->first()) }}"
-                                               class="btn btn-sm btn-outline-success" title="View/Download">
+                                    @if($currentStatus === 'pending')
+                                        <!-- Upload Button - Available for all user levels -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-primary"
+                                                onclick="openUploadModal({{ $item->id }})"
+                                                title="Upload Document">
+                                            Upload
+                                        </button>
+                                    @elseif($currentStatus === 'uploaded')
+                                        <!-- View/Download Button -->
+                                        @if($item->documents->where('status', 'uploaded')->first())
+                                            <button type="button"
+                                                    class="btn btn-sm btn-info"
+                                                    onclick="viewDocument({{ $item->documents->where('status', 'uploaded')->first()->id }})"
+                                                    title="View Document">
                                                 View/Download
-                                            </a>
+                                            </button>
                                         @endif
-                                    @elseif($currentStatus === 'overdue' || $displayStatus === 'overdue')
-                                        <!-- Send Reminder Action -->
+
+                                        <!-- Approve Button -->
+                                        <button class="btn btn-sm btn-success" onclick="approveItem({{ $item->id }})" title="Approve">
+                                            Approve
+                                        </button>
+
+                                        <!-- FIXED: Reject Button - Remove requestId parameter -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-danger"
+                                                onclick="openRejectModal({{ $item->id }})"
+                                                title="Reject with Note">
+                                            Reject
+                                        </button>
+                                    @elseif($currentStatus === 'approved')
+                                        <!-- View/Download Button -->
+                                        @if($item->documents->where('status', 'approved')->first())
+                                            <button type="button"
+                                                    class="btn btn-sm btn-success"
+                                                    onclick="viewDocument({{ $item->documents->where('status', 'approved')->first()->id }})"
+                                                    title="View Document">
+                                                View/Download
+                                            </button>
+                                        @endif
+                                    @elseif($currentStatus === 'rejected')
+                                        <!-- Upload Button - Allow re-upload -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-warning"
+                                                onclick="openUploadModal({{ $item->id }})"
+                                                title="Re-upload Document">
+                                            Re-upload
+                                        </button>
+                                    @elseif($displayStatus === 'overdue')
+                                        <!-- Send Reminder Button -->
                                         <button type="button"
                                                 class="btn btn-sm btn-danger"
                                                 onclick="sendReminder({{ $request->id }})"
                                                 title="Send Reminder">
                                             Send Reminder
                                         </button>
-                                    @else
-                                        <!-- Default Upload Action -->
-                                        <a href="{{ route('admin.pbc-requests.show', $request) }}"
-                                           class="btn btn-sm btn-outline-primary" title="View Details">
-                                            Upload
-                                        </a>
-                                    @endif
 
-                                    <!-- View Request Details -->
-                                    <a href="{{ route('admin.pbc-requests.show', $request) }}"
-                                       class="btn btn-sm btn-outline-info" title="View Request">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
+                                        <!-- Upload Button - Available for staff -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-primary"
+                                                onclick="openUploadModal({{ $item->id }})"
+                                                title="Upload Document">
+                                            Upload
+                                        </button>
+                                    @else
+                                        <!-- Default Upload Button -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-primary"
+                                                onclick="openUploadModal({{ $item->id }})"
+                                                title="Upload Document">
+                                            Upload
+                                        </button>
+                                    @endif
                                 </div>
                             </td>
 
-                            <!-- Note -->
+                            <!-- FIXED: Updated Note column to properly display rejection reasons -->
                             <td class="py-3">
                                 <div class="text-truncate" style="max-width: 150px;">
-                                    @if($item->remarks)
-                                        {{ $item->remarks }}
-                                    @elseif($currentStatus === 'rejected' && $item->documents->where('status', 'rejected')->first())
-                                        <span class="text-danger">{{ Str::limit($item->documents->where('status', 'rejected')->first()->admin_notes ?? 'Rejected', 30) }}</span>
+                                    @php
+                                        // Get the latest rejected document's admin notes
+                                        $rejectedDoc = $item->documents->where('status', 'rejected')->first();
+                                        $approvedDoc = $item->documents->where('status', 'approved')->first();
+                                    @endphp
+
+                                    @if($currentStatus === 'rejected' && $rejectedDoc && $rejectedDoc->admin_notes)
+                                        <span class="text-danger" title="{{ $rejectedDoc->admin_notes }}">
+                                            {{ Str::limit($rejectedDoc->admin_notes, 30) }}
+                                        </span>
+                                    @elseif($currentStatus === 'approved' && $approvedDoc && $approvedDoc->admin_notes)
+                                        <span class="text-success" title="{{ $approvedDoc->admin_notes }}">
+                                            {{ Str::limit($approvedDoc->admin_notes, 30) }}
+                                        </span>
+                                    @elseif($item->remarks)
+                                        <span title="{{ $item->remarks }}">{{ Str::limit($item->remarks, 30) }}</span>
                                     @else
-                                        <span class="text-muted">Insert text</span>
+                                        <span class="text-muted">No notes</span>
                                     @endif
                                 </div>
                             </td>
@@ -277,13 +323,159 @@
     </div>
 </div>
 
+<!-- Enhanced Upload Modal for 300MB files -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadModalLabel">
+                    <i class="fas fa-cloud-upload-alt me-2"></i>Upload Document
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" id="itemId" name="item_id">
+
+                    <!-- File Selection Section -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-file me-2"></i>Select File
+                        </label>
+                        <input type="file"
+                               class="form-control form-control-lg"
+                               name="document"
+                               id="documentFile"
+                               required
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip,.rar,.txt,.csv"
+                               onchange="handleFileSelection()">
+
+                        <!-- File Format Guidelines -->
+                        <div class="mt-2">
+                            <small class="text-muted d-block">
+                                <strong>Accepted formats:</strong> PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, PNG, JPG, JPEG, ZIP, RAR, TXT, CSV
+                            </small>
+                            <small class="text-success d-block">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <strong>Maximum file size: 300MB</strong>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- File Preview Area (dynamically populated) -->
+                    <div id="filePreviewArea" style="display: none;" class="mb-4">
+                        <div class="card border-success">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-eye me-2"></i>Selected File Preview
+                                </h6>
+                            </div>
+                            <div class="card-body" id="fileInfo">
+                                <!-- File information will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Progress Section -->
+                    <div class="mb-4">
+                        <div class="progress" style="display: none; height: 25px;" id="uploadProgress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                 role="progressbar"
+                                 style="width: 0%"
+                                 aria-valuenow="0"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                                0%
+                            </div>
+                        </div>
+
+                        <!-- Upload Status Messages -->
+                        <div id="uploadStatus" style="display: none;" class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <span id="statusMessage">Preparing upload...</span>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Notes Section -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-sticky-note me-2"></i>Notes (Optional)
+                        </label>
+                        <textarea class="form-control"
+                                  name="notes"
+                                  rows="3"
+                                  maxlength="500"
+                                  placeholder="Add any notes about this document (e.g., version info, special instructions)..."></textarea>
+                        <div class="form-text">
+                            <small class="text-muted">Maximum 500 characters</small>
+                        </div>
+                    </div>
+
+                    <!-- Upload Guidelines -->
+                    <div class="alert alert-info d-flex align-items-start">
+                        <i class="fas fa-lightbulb me-2 mt-1"></i>
+                        <div>
+                            <strong>Upload Guidelines:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li>Ensure stable internet connection for large files</li>
+                                <li>Do not close this window during upload</li>
+                                <li>Upload may take several minutes for large files</li>
+                                <li>File will be automatically scanned for security</li>
+                            </ul>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-primary" onclick="uploadDocument()" id="uploadButton">
+                    <i class="fas fa-cloud-upload-alt me-2"></i>Upload Document
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reject Document</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rejectForm">
+                    @csrf
+                    <input type="hidden" id="rejectItemId" name="item_id">
+                    <!-- REMOVED: rejectRequestId hidden input since global route doesn't need it -->
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Rejection *</label>
+                        <textarea class="form-control" name="reason" rows="4" required
+                                  placeholder="Please provide a detailed reason for rejection..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="rejectDocument()">Reject</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Pagination -->
 @if($requests->hasPages())
 <div class="d-flex justify-content-center mt-4">
     {{ $requests->appends(request()->query())->links() }}
 </div>
 @endif
-
 
 @endsection
 
@@ -347,6 +539,66 @@
     font-size: 0.8rem;
 }
 
+/* Enhanced modal styling for better UX */
+.modal-lg {
+    max-width: 800px;
+}
+
+.form-control-lg {
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
+}
+
+.progress {
+    border-radius: 10px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.progress-bar {
+    font-weight: 600;
+    font-size: 0.875rem;
+    line-height: 25px;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.file-preview-card {
+    border: 2px dashed #28a745;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.upload-guidelines {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    border-left: 4px solid #28a745;
+}
+
+/* File type icons */
+.file-icon {
+    font-size: 2rem;
+    color: #6c757d;
+}
+
+/* Animation for upload states */
+.upload-success {
+    animation: success-pulse 0.5s ease-in-out;
+}
+
+@keyframes success-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.upload-error {
+    animation: error-shake 0.5s ease-in-out;
+}
+
+@keyframes error-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
 /* Status color improvements */
 .bg-primary { background-color: #007bff !important; }
 .bg-secondary { background-color: #6c757d !important; }
@@ -401,6 +653,20 @@
 
     .card-body h4 {
         font-size: 1.25rem;
+    }
+
+    .modal-lg {
+        max-width: 95%;
+        margin: 1rem auto;
+    }
+
+    .modal-body {
+        padding: 1rem;
+    }
+
+    .form-control-lg {
+        font-size: 1rem;
+        padding: 0.5rem 0.75rem;
     }
 }
 
@@ -483,7 +749,13 @@ small.text-muted {
 
 @section('scripts')
 <script>
+// Global variables for upload system
+let uploadLimits = null;
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Load upload limits on page load
+    loadUploadLimits();
+
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
     const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
@@ -495,7 +767,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const pendingItems = document.querySelectorAll('.badge.bg-warning, .badge.bg-secondary');
         if (pendingItems.length > 0) {
             console.log('Checking for status updates...');
-            // You can implement partial refresh here
         }
     }, 180000); // 3 minutes
 
@@ -505,7 +776,6 @@ document.addEventListener('DOMContentLoaded', function() {
         let searchTimeout;
         searchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
-            // Add search suggestions or live search here
         });
     }
 
@@ -516,7 +786,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add('loading');
                 this.disabled = true;
 
-                // Re-enable after 3 seconds if form hasn't redirected
                 setTimeout(() => {
                     this.classList.remove('loading');
                     this.disabled = false;
@@ -525,118 +794,707 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Row click enhancement (excluding buttons)
-    document.querySelectorAll('.table tbody tr').forEach(row => {
-        row.addEventListener('click', function(e) {
-            if (!e.target.closest('.btn-group') && !e.target.closest('button')) {
-                const viewBtn = this.querySelector('.btn-outline-info');
-                if (viewBtn) {
-                    window.location.href = viewBtn.href;
-                }
-            }
-        });
-    });
-
     // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
-        // Ctrl/Cmd + F for search
         if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
             e.preventDefault();
             searchInput?.focus();
         }
 
-        // Escape to clear search
         if (e.key === 'Escape' && document.activeElement === searchInput) {
             searchInput.value = '';
         }
     });
+
+    // Add CSRF token if missing
+    const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    if (!csrfToken) {
+        console.warn('CSRF token meta tag not found. Adding it...');
+        const metaTag = document.createElement('meta');
+        metaTag.name = 'csrf-token';
+        metaTag.content = document.querySelector('input[name="_token"]')?.value || '';
+        document.head.appendChild(metaTag);
+    }
 });
 
-// Send reminder function
-function sendReminder(requestId) {
-    if (confirm('Send reminder to client for this request?')) {
-        const button = event.target;
-        const originalText = button.innerHTML;
-
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-        button.disabled = true;
-
-        fetch('/admin/reminders/send', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            },
-            body: JSON.stringify({
-                pbc_request_id: requestId,
-                reminder_type: 'urgent',
-                custom_message: 'Your document submission is overdue. Please upload as soon as possible.'
-            })
-        })
+// Load system upload limits
+function loadUploadLimits() {
+    fetch('/admin/upload/limits')
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                button.innerHTML = '<i class="fas fa-check"></i> Sent!';
-                button.classList.remove('btn-danger');
-                button.classList.add('btn-success');
-
-                // Show success message
-                showAlert('Reminder sent successfully!', 'success');
-
-                // Reset button after 3 seconds
-                setTimeout(() => {
-                    button.innerHTML = originalText;
-                    button.classList.remove('btn-success');
-                    button.classList.add('btn-danger');
-                    button.disabled = false;
-                }, 3000);
-            } else {
-                button.innerHTML = originalText;
-                button.disabled = false;
-                showAlert('Failed to send reminder: ' + (data.message || 'Unknown error'), 'danger');
-            }
+            console.log('Upload limits loaded:', data);
+            uploadLimits = data;
         })
         .catch(error => {
-            console.error('Error:', error);
+            console.error('Failed to load upload limits:', error);
+            // Set default limits if API fails
+            uploadLimits = {
+                max_file_size: 314572800, // 300MB
+                max_file_size_formatted: '300MB',
+                allowed_extensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip', 'rar', 'txt', 'csv']
+            };
+        });
+}
+
+// Open upload modal
+function openUploadModal(itemId) {
+    console.log('Opening upload modal for item:', itemId);
+
+    const itemIdInput = document.getElementById('itemId');
+    const uploadForm = document.getElementById('uploadForm');
+
+    if (!itemIdInput || !uploadForm) {
+        console.error('Upload modal elements not found');
+        showAlert('Upload form not found. Please refresh the page.', 'danger');
+        return;
+    }
+
+    uploadForm.reset();
+    itemIdInput.value = itemId;
+
+    // Reset modal state
+    const previewArea = document.getElementById('filePreviewArea');
+    const progressContainer = document.getElementById('uploadProgress');
+    const uploadButton = document.getElementById('uploadButton');
+
+    if (previewArea) previewArea.style.display = 'none';
+    if (progressContainer) progressContainer.style.display = 'none';
+    if (uploadButton) {
+        uploadButton.disabled = false;
+        uploadButton.innerHTML = '<i class="fas fa-cloud-upload-alt me-2"></i>Upload Document';
+    }
+
+    const uploadModal = new bootstrap.Modal(document.getElementById('uploadModal'));
+    uploadModal.show();
+}
+
+// Enhanced file selection handler with real-time validation
+function handleFileSelection() {
+    const fileInput = document.getElementById('documentFile');
+    const previewArea = document.getElementById('filePreviewArea');
+    const fileInfo = document.getElementById('fileInfo');
+    const uploadButton = document.getElementById('uploadButton');
+
+    if (!fileInput || !fileInput.files[0]) {
+        if (previewArea) previewArea.style.display = 'none';
+        if (uploadButton) uploadButton.disabled = false;
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const maxSize = uploadLimits ? uploadLimits.max_file_size : 314572800; // 300MB
+    const isValidSize = file.size <= maxSize;
+    const isValidType = validateFileType(file.name);
+
+    // Show preview area
+    if (previewArea) previewArea.style.display = 'block';
+
+    // Generate file preview with enhanced information
+    const fileIcon = getFileIcon(file.name);
+    const sizeFormatted = formatFileSize(file.size);
+    const lastModified = new Date(file.lastModified).toLocaleDateString();
+
+    if (fileInfo) {
+        fileInfo.innerHTML = `
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <i class="fas fa-file${fileIcon} fa-3x ${isValidType ? 'text-primary' : 'text-danger'}"></i>
+                </div>
+                <div class="col">
+                    <h6 class="mb-1 text-truncate" title="${file.name}">${file.name}</h6>
+                    <p class="mb-1">
+                        <span class="badge ${isValidType ? 'bg-success' : 'bg-danger'}">
+                            ${isValidType ? 'Valid Format' : 'Invalid Format'}
+                        </span>
+                        <span class="badge ${isValidSize ? 'bg-success' : 'bg-danger'} ms-1">
+                            ${sizeFormatted}
+                        </span>
+                    </p>
+                    <small class="text-muted">
+                        <i class="fas fa-calendar me-1"></i>Modified: ${lastModified}
+                    </small>
+                </div>
+            </div>
+
+            ${!isValidSize || !isValidType ? `
+            <div class="alert alert-danger mt-3 mb-0">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                ${!isValidSize ? `File size (${sizeFormatted}) exceeds 300MB limit. ` : ''}
+                ${!isValidType ? 'File type not supported. ' : ''}
+                Please select a different file.
+            </div>
+            ` : `
+            <div class="alert alert-success mt-3 mb-0">
+                <i class="fas fa-check-circle me-2"></i>
+                File is ready for upload!
+            </div>
+            `}
+        `;
+    }
+
+    // Enable/disable upload button
+    if (uploadButton) uploadButton.disabled = !isValidSize || !isValidType;
+}
+
+// Validate file type
+function validateFileType(filename) {
+    const allowedExtensions = uploadLimits ?
+        uploadLimits.allowed_extensions :
+        ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip', 'rar', 'txt', 'csv'];
+
+    const extension = filename.split('.').pop().toLowerCase();
+    return allowedExtensions.includes(extension);
+}
+
+// Get file icon based on extension
+function getFileIcon(filename) {
+    const extension = filename.split('.').pop().toLowerCase();
+    const iconMap = {
+        'pdf': '-pdf',
+        'doc': '-word', 'docx': '-word',
+        'xls': '-excel', 'xlsx': '-excel',
+        'ppt': '-powerpoint', 'pptx': '-powerpoint',
+        'jpg': '-image', 'jpeg': '-image', 'png': '-image',
+        'zip': '-archive', 'rar': '-archive',
+        'txt': '-alt', 'csv': '-csv'
+    };
+
+    return iconMap[extension] || '';
+}
+
+// Enhanced file size formatting
+function formatFileSize(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+
+    while (bytes >= 1024 && i < units.length - 1) {
+        bytes /= 1024;
+        i++;
+    }
+
+    return `${bytes.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
+}
+
+// Enhanced upload function with XMLHttpRequest and progress tracking
+function uploadDocument() {
+    console.log('Starting document upload...');
+
+    const form = document.getElementById('uploadForm');
+    const itemId = document.getElementById('itemId').value;
+    const fileInput = form.querySelector('input[name="document"]');
+    const progressContainer = document.getElementById('uploadProgress');
+    const progressBar = progressContainer.querySelector('.progress-bar');
+    const statusContainer = document.getElementById('uploadStatus');
+    const statusMessage = document.getElementById('statusMessage');
+
+    if (!form || !itemId || !fileInput.files[0]) {
+        showAlert('Please select a file to upload', 'danger');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const maxSize = uploadLimits ? uploadLimits.max_file_size : 314572800; // 300MB
+
+    // File size validation
+    if (file.size > maxSize) {
+        showAlert('File size exceeds 300MB limit. Please choose a smaller file.', 'danger');
+        return;
+    }
+
+    // File type validation
+    if (!validateFileType(file.name)) {
+        showAlert('File type not allowed. Please select a valid file format.', 'danger');
+        return;
+    }
+
+    const formData = new FormData(form);
+    const uploadBtn = document.getElementById('uploadButton');
+    const cancelBtn = document.querySelector('#uploadModal .btn-secondary');
+
+    if (!uploadBtn) {
+        console.error('Upload button not found');
+        return;
+    }
+
+    // Show progress and disable controls
+    const originalText = uploadBtn.innerHTML;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    uploadBtn.disabled = true;
+    if (cancelBtn) cancelBtn.disabled = true;
+
+    progressContainer.style.display = 'block';
+    statusContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+    progressBar.classList.remove('bg-danger', 'bg-success');
+    progressBar.classList.add('bg-primary');
+
+    // Get CSRF token
+    const csrfToken = getCsrfToken();
+    if (!csrfToken) {
+        resetUploadState(uploadBtn, cancelBtn, originalText, progressContainer, statusContainer);
+        return;
+    }
+
+    // Create XMLHttpRequest for progress tracking
+    const xhr = new XMLHttpRequest();
+    const uploadStartTime = Date.now();
+
+    // Track upload progress
+    xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable) {
+            const percentComplete = Math.round((e.loaded / e.total) * 100);
+            progressBar.style.width = percentComplete + '%';
+            progressBar.textContent = percentComplete + '%';
+
+            // Show upload speed and estimated time
+            if (e.loaded > 0 && uploadStartTime) {
+                const uploadSpeed = e.loaded / ((Date.now() - uploadStartTime) / 1000); // bytes per second
+                const remainingBytes = e.total - e.loaded;
+                const estimatedTime = remainingBytes / uploadSpeed;
+
+                if (estimatedTime > 60) {
+                    const minutes = Math.floor(estimatedTime / 60);
+                    const seconds = Math.floor(estimatedTime % 60);
+                    statusMessage.textContent = `${formatFileSize(uploadSpeed)}/s - ${minutes}m ${seconds}s remaining`;
+                } else if (estimatedTime > 0) {
+                    statusMessage.textContent = `${formatFileSize(uploadSpeed)}/s - ${Math.floor(estimatedTime)}s remaining`;
+                } else {
+                    statusMessage.textContent = `${formatFileSize(uploadSpeed)}/s - Almost complete`;
+                }
+            }
+        }
+    }, false);
+
+    // Handle completion
+    xhr.addEventListener('load', function() {
+        try {
+            const response = JSON.parse(xhr.responseText);
+            console.log('Upload response:', response);
+
+            if (xhr.status === 200 && response.success) {
+                progressBar.classList.remove('bg-primary');
+                progressBar.classList.add('bg-success');
+                progressBar.textContent = '100% - Upload Complete!';
+                statusMessage.textContent = 'File uploaded successfully!';
+
+                showAlert('Document uploaded successfully!', 'success');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
+                if (modal) modal.hide();
+
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                throw new Error(response.message || 'Upload failed');
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            progressBar.classList.remove('bg-primary');
+            progressBar.classList.add('bg-danger');
+            progressBar.textContent = 'Upload Failed';
+            statusMessage.textContent = 'Upload failed: ' + error.message;
+            showAlert('Failed to upload document: ' + error.message, 'danger');
+
+            setTimeout(() => {
+                resetUploadState(uploadBtn, cancelBtn, originalText, progressContainer, statusContainer);
+            }, 3000);
+        }
+    });
+
+    // Handle errors
+    xhr.addEventListener('error', function() {
+        console.error('Upload network error');
+        progressBar.classList.remove('bg-primary');
+        progressBar.classList.add('bg-danger');
+        progressBar.textContent = 'Network Error';
+        statusMessage.textContent = 'Network error during upload';
+        showAlert('Network error during upload. Please check your connection and try again.', 'danger');
+        resetUploadState(uploadBtn, cancelBtn, originalText, progressContainer, statusContainer);
+    });
+
+    // Handle timeout
+    xhr.addEventListener('timeout', function() {
+        console.error('Upload timeout');
+        progressBar.classList.remove('bg-primary');
+        progressBar.classList.add('bg-danger');
+        progressBar.textContent = 'Upload Timeout';
+        statusMessage.textContent = 'Upload timed out';
+        showAlert('Upload timed out. Please try again with a stable connection.', 'danger');
+        resetUploadState(uploadBtn, cancelBtn, originalText, progressContainer, statusContainer);
+    });
+
+    // Set timeout for large files (10 minutes)
+    xhr.timeout = 600000;
+
+    // Send request
+    console.log('Uploading to:', `/admin/pbc-requests/items/${itemId}/upload`);
+    xhr.open('POST', `/admin/pbc-requests/items/${itemId}/upload`);
+    xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+    xhr.send(formData);
+}
+
+// Helper function to reset upload state
+function resetUploadState(uploadBtn, cancelBtn, originalText, progressContainer, statusContainer) {
+    if (uploadBtn) {
+        uploadBtn.innerHTML = originalText;
+        uploadBtn.disabled = false;
+    }
+    if (cancelBtn) cancelBtn.disabled = false;
+    if (progressContainer) progressContainer.style.display = 'none';
+    if (statusContainer) statusContainer.style.display = 'none';
+
+    const progressBar = progressContainer?.querySelector('.progress-bar');
+    if (progressBar) {
+        progressBar.classList.remove('bg-danger', 'bg-success');
+        progressBar.classList.add('bg-primary');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+    }
+}
+
+// Open reject modal
+function openRejectModal(itemId) {
+    console.log('Opening reject modal for item:', itemId);
+
+    const rejectItemId = document.getElementById('rejectItemId');
+    const rejectForm = document.getElementById('rejectForm');
+
+    if (!rejectItemId || !rejectForm) {
+        console.error('Reject modal elements not found');
+        showAlert('Reject form not found. Please refresh the page.', 'danger');
+        return;
+    }
+
+    rejectForm.reset();
+    rejectItemId.value = itemId;
+
+    const rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
+    rejectModal.show();
+}
+
+// Reject document
+function rejectDocument() {
+    console.log('Starting document rejection...');
+
+    const form = document.getElementById('rejectForm');
+    const itemId = document.getElementById('rejectItemId').value;
+
+    if (!form || !itemId) {
+        showAlert('Reject form data missing', 'danger');
+        return;
+    }
+
+    const formData = new FormData(form);
+    const rejectBtn = document.querySelector('#rejectModal .btn-danger');
+
+    if (!rejectBtn) {
+        console.error('Reject button not found');
+        return;
+    }
+
+    const originalText = rejectBtn.innerHTML;
+    rejectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rejecting...';
+    rejectBtn.disabled = true;
+
+    // Get CSRF token
+    const csrfToken = getCsrfToken();
+    if (!csrfToken) {
+        rejectBtn.innerHTML = originalText;
+        rejectBtn.disabled = false;
+        return;
+    }
+
+    // Use the global reject route
+    const rejectUrl = `/admin/pbc-requests/items/${itemId}/reject`;
+    console.log('Rejecting at:', rejectUrl);
+
+    fetch(rejectUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRF-TOKEN': csrfToken
+        }
+    })
+    .then(response => {
+        console.log('Reject response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Reject response:', data);
+
+        if (data.success) {
+            showAlert('Document rejected successfully!', 'success');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('rejectModal'));
+            if (modal) modal.hide();
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showAlert('Failed to reject document: ' + (data.message || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Reject error:', error);
+        showAlert('Error rejecting document. Please try again.', 'danger');
+    })
+    .finally(() => {
+        rejectBtn.innerHTML = originalText;
+        rejectBtn.disabled = false;
+    });
+}
+
+// Approve item function for global index
+function approveItem(itemId) {
+    console.log('Approving item:', itemId);
+
+    if (!confirm('Approve this item?')) {
+        return;
+    }
+
+    const approveBtn = event.target;
+    const originalText = approveBtn.innerHTML;
+    approveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Approving...';
+    approveBtn.disabled = true;
+
+    // Get CSRF token
+    const csrfToken = getCsrfToken();
+    if (!csrfToken) {
+        approveBtn.innerHTML = originalText;
+        approveBtn.disabled = false;
+        return;
+    }
+
+    console.log('Approving at:', `/admin/pbc-requests/items/${itemId}/approve`);
+
+    fetch(`/admin/pbc-requests/items/${itemId}/approve`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken
+        }
+    })
+    .then(response => {
+        console.log('Approve response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Approve response:', data);
+
+        if (data.success) {
+            showAlert('Item approved successfully!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showAlert('Failed to approve item: ' + (data.message || 'Unknown error'), 'danger');
+            approveBtn.innerHTML = originalText;
+            approveBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Approve error:', error);
+        showAlert('Error approving item. Please try again.', 'danger');
+        approveBtn.innerHTML = originalText;
+        approveBtn.disabled = false;
+    });
+}
+
+// View document
+function viewDocument(documentId) {
+    console.log('Viewing document:', documentId);
+    window.open(`/documents/${documentId}/download`, '_blank');
+}
+
+// Send reminder function - FOR GLOBAL INDEX (takes requestId, not itemId)
+function sendReminder(requestId) {
+    console.log('Sending reminder for request:', requestId);
+
+    if (!confirm('Send reminder to client for this request?')) {
+        return;
+    }
+
+    const button = event.target;
+    const originalText = button.innerHTML;
+
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    button.disabled = true;
+
+    // Get CSRF token
+    const csrfToken = getCsrfToken();
+    if (!csrfToken) {
+        button.innerHTML = originalText;
+        button.disabled = false;
+        return;
+    }
+
+    fetch('/admin/pbc-requests/reminders/send', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken
+        },
+        body: JSON.stringify({
+            pbc_request_id: requestId,
+            reminder_type: 'urgent',
+            custom_message: 'Your document submission is overdue. Please upload as soon as possible.'
+        })
+    })
+    .then(response => {
+        console.log('Reminder response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Reminder response:', data);
+
+        if (data.success) {
+            button.innerHTML = '<i class="fas fa-check"></i> Sent!';
+            button.classList.remove('btn-danger');
+            button.classList.add('btn-success');
+
+            showAlert('Reminder sent successfully!', 'success');
+
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-danger');
+                button.disabled = false;
+            }, 3000);
+        } else {
             button.innerHTML = originalText;
             button.disabled = false;
-            showAlert('Error sending reminder. Please try again.', 'danger');
+            showAlert('Failed to send reminder: ' + (data.message || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Reminder error:', error);
+        button.innerHTML = originalText;
+        button.disabled = false;
+        showAlert('Error sending reminder. Please try again.', 'danger');
+    });
+}
+
+// Helper function to get CSRF token
+function getCsrfToken() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                     document.querySelector('input[name="_token"]')?.value;
+
+    if (!csrfToken) {
+        console.error('CSRF token not found');
+        showAlert('Security token not found. Please refresh the page.', 'danger');
+        return null;
+    }
+
+    return csrfToken;
+}
+
+// Enhanced alert function
+function showAlert(message, type) {
+    console.log(`Alert [${type}]:`, message);
+
+    // Remove existing alerts
+    const existingAlerts = document.querySelectorAll('.alert.position-fixed');
+    existingAlerts.forEach(alert => alert.remove());
+
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; max-width: 400px;';
+
+    const iconMap = {
+        'success': 'check-circle',
+        'danger': 'exclamation-triangle',
+        'warning': 'exclamation-triangle',
+        'info': 'info-circle'
+    };
+
+    alertDiv.innerHTML = `
+        <i class="fas fa-${iconMap[type] || 'info-circle'} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+
+    document.body.appendChild(alertDiv);
+
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            try {
+                const bsAlert = bootstrap.Alert.getOrCreateInstance(alertDiv);
+                bsAlert.close();
+            } catch (e) {
+                alertDiv.remove();
+            }
+        }
+    }, 5000);
+
+    // Manual close functionality
+    const closeBtn = alertDiv.querySelector('.btn-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            try {
+                const bsAlert = bootstrap.Alert.getOrCreateInstance(alertDiv);
+                bsAlert.close();
+            } catch (e) {
+                alertDiv.remove();
+            }
         });
     }
 }
 
-// Show alert function
-function showAlert(message, type) {
-    // Create alert element
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
+// Modal reset functionality
+document.getElementById('uploadModal').addEventListener('hidden.bs.modal', function () {
+    const form = document.getElementById('uploadForm');
+    const previewArea = document.getElementById('filePreviewArea');
+    const progressContainer = document.getElementById('uploadProgress');
+    const statusContainer = document.getElementById('uploadStatus');
+    const uploadButton = document.getElementById('uploadButton');
 
-    // Add to page
-    document.body.appendChild(alertDiv);
+    if (form) form.reset();
+    if (previewArea) previewArea.style.display = 'none';
+    if (progressContainer) progressContainer.style.display = 'none';
+    if (statusContainer) statusContainer.style.display = 'none';
 
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 5000);
-}
+    const progressBar = progressContainer?.querySelector('.progress-bar');
+    if (progressBar) {
+        progressBar.classList.remove('bg-danger', 'bg-success');
+        progressBar.classList.add('bg-primary');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+    }
 
-// Table sorting function (basic)
+    if (uploadButton) {
+        uploadButton.disabled = false;
+        uploadButton.innerHTML = '<i class="fas fa-cloud-upload-alt me-2"></i>Upload Document';
+    }
+});
+
+// Table sorting function (basic placeholder)
 function sortTable(columnIndex) {
-    // Add table sorting logic here if needed
     console.log('Sort column:', columnIndex);
+    showAlert('Table sorting feature coming soon!', 'info');
 }
 
 // Export function (placeholder)
 function exportRequests() {
     console.log('Export functionality not implemented yet');
     showAlert('Export feature coming soon!', 'info');
+}
+
+// Debug function
+function debugPage() {
+    console.log('=== DEBUG INFO ===');
+    console.log('CSRF Token:', getCsrfToken());
+    console.log('Upload Modal:', document.getElementById('uploadModal'));
+    console.log('Reject Modal:', document.getElementById('rejectModal'));
+    console.log('Upload Limits:', uploadLimits);
+    console.log('Forms:', {
+        upload: document.getElementById('uploadForm'),
+        reject: document.getElementById('rejectForm')
+    });
 }
 </script>
 @endsection

@@ -2,21 +2,32 @@
 @section('title', 'Edit Project')
 
 @section('content')
-<h1>Edit Project: {{ $project->name }}</h1>
+<h1>Edit Project: {{ $project->engagement_name ?? $project->name }}</h1>
 
 <form method="POST" action="{{ route('admin.projects.update', $project) }}">
     @csrf
     @method('PUT')
+
+    <!-- Hidden field to specify redirect location -->
+    <input type="hidden" name="redirect_to" value="index">
+
     <div class="row">
         <!-- Left Column - Project Details -->
         <div class="col-md-6">
             <h4 class="mb-3">Project Information</h4>
 
             <div class="mb-3">
-                <label class="form-label">Project Name *</label>
-                <input type="text" name="name" class="form-control @error('name') is-invalid @enderror"
-                       value="{{ old('name', $project->name) }}" required>
-                @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                <label class="form-label">Job ID</label>
+                <input type="text" name="job_id" class="form-control @error('job_id') is-invalid @enderror"
+                       value="{{ old('job_id', $project->job_id) }}" placeholder="e.g., PRJ-00001">
+                @error('job_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Engagement Name *</label>
+                <input type="text" name="engagement_name" class="form-control @error('engagement_name') is-invalid @enderror"
+                       value="{{ old('engagement_name', $project->engagement_name ?? $project->name) }}" required>
+                @error('engagement_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
             <div class="mb-3">
@@ -195,7 +206,7 @@
     <hr>
     <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">Update Project</button>
-        <a href="{{ route('admin.projects.show', $project) }}" class="btn btn-secondary">Cancel</a>
+        <a href="{{ route('admin.projects.index') }}" class="btn btn-secondary">Cancel</a>
     </div>
 </form>
 @endsection

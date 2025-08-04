@@ -35,8 +35,8 @@ Route::middleware('auth')->group(function () {
         ->name('documents.download');
 });
 
-// Admin Routes
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+// Admin Routes with Enhanced Upload Configuration Middleware
+Route::middleware(['auth', 'admin', 'check.upload.config'])->prefix('admin')->name('admin.')->group(function () {
     // Dashboard
     Route::get('dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
 
@@ -71,6 +71,26 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::patch('pbc-requests/{pbcRequest}/items/{item}/review', [AdminPbcRequestController::class, 'reviewItem'])
         ->name('pbc-requests.review-item');
 
+    // Enhanced Upload Configuration Routes
+    Route::get('upload/limits', [FileUploadController::class, 'getUploadLimits'])
+        ->name('upload.limits');
+    Route::get('upload/stats', [FileUploadController::class, 'getUploadStats'])
+        ->name('upload.stats');
+    Route::get('upload/test', [FileUploadController::class, 'testUpload'])
+        ->name('upload.test');
+    Route::post('files/validate', [FileUploadController::class, 'validateFile'])
+        ->name('files.validate');
+
+    // FIXED: PBC Request Item Actions (Global Routes) - Updated routes
+    Route::post('pbc-requests/items/{item}/upload', [FileUploadController::class, 'uploadForItem'])
+        ->name('pbc-requests.items.upload');
+    Route::post('pbc-requests/items/{item}/approve', [AdminPbcRequestController::class, 'approveItem'])
+        ->name('pbc-requests.items.approve');
+    Route::post('pbc-requests/items/{item}/reject', [AdminPbcRequestController::class, 'rejectItemGlobal'])
+        ->name('pbc-requests.items.reject');
+    Route::get('pbc-requests/items/{item}/files', [AdminPbcRequestController::class, 'getItemFiles'])
+        ->name('pbc-requests.items.files');
+
     // Global Import System Routes
     Route::prefix('pbc-requests')->name('pbc-requests.')->group(function () {
         // Import form and preview
@@ -86,15 +106,27 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
         // Import statistics API
         Route::get('import/stats', [ImportController::class, 'getImportStats'])->name('import.stats');
+
+        // Enhanced reminder routes for global index
+        Route::post('reminders/send', [ReminderController::class, 'sendGlobalReminder'])
+            ->name('reminders.send');
     });
 
-    // Document Management & Archive (All admin roles)
-    Route::get('documents', [AdminDocumentController::class, 'index'])->name('documents.index');
-    Route::get('documents/{document}', [AdminDocumentController::class, 'show'])->name('documents.show');
-    Route::patch('documents/{document}/approve', [AdminDocumentController::class, 'approve'])
-        ->name('documents.approve');
-    Route::patch('documents/{document}/reject', [AdminDocumentController::class, 'reject'])
-        ->name('documents.reject');
+    // FIXED: Document Management & Archive Routes - Proper ordering and clear naming
+    Route::prefix('documents')->name('documents.')->group(function () {
+        // Index and show routes
+        Route::get('/', [AdminDocumentController::class, 'index'])->name('index');
+        Route::get('/deleted', [AdminDocumentController::class, 'deletedIndex'])->name('deleted'); // ADDED: Deleted documents archive
+        Route::get('/{document}', [AdminDocumentController::class, 'show'])->name('show');
+
+        // Document approval routes
+        Route::patch('/{document}/approve', [AdminDocumentController::class, 'approve'])->name('approve');
+        Route::patch('/{document}/reject', [AdminDocumentController::class, 'reject'])->name('reject');
+
+        // FIXED: Document delete routes with proper naming
+        Route::delete('/{document}', [AdminDocumentController::class, 'destroy'])->name('destroy');
+        Route::post('/bulk-delete', [AdminDocumentController::class, 'bulkDelete'])->name('bulk-delete');
+    });
 
     // Progress Tracking
     Route::get('progress', [AdminDashboardController::class, 'progress'])->name('progress');
@@ -114,7 +146,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::delete('api/documents/{document}', [FileUploadController::class, 'delete'])
         ->name('api.documents.delete');
 
-    // Project-specific PBC Request Management Routes
+    // FIXED: Project-specific PBC Request Management Routes
     Route::prefix('clients/{client}/projects/{project}')->name('clients.projects.')->group(function () {
         // Project-specific PBC request management
         Route::get('pbc-requests', [AdminPbcRequestController::class, 'projectIndex'])
@@ -124,7 +156,17 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('pbc-requests', [AdminPbcRequestController::class, 'projectStore'])
             ->name('pbc-requests.store');
 
-        // Project-specific Import Routes - CONSOLIDATED
+        // Edit and Update routes for PBC requests
+        Route::get('pbc-requests/edit', [AdminPbcRequestController::class, 'projectEdit'])
+            ->name('pbc-requests.edit');
+        Route::put('pbc-requests', [AdminPbcRequestController::class, 'projectUpdate'])
+            ->name('pbc-requests.update');
+
+        // FIXED: Updated reject route with proper parameter binding
+        Route::post('pbc-requests/{pbcRequest}/items/{item}/reject', [AdminPbcRequestController::class, 'rejectItem'])
+            ->name('pbc-requests.items.reject');
+
+        // Project-specific Import Routes
         Route::prefix('pbc-requests')->name('pbc-requests.')->group(function () {
             // Import form
             Route::get('import', [ImportController::class, 'showProjectImportForm'])

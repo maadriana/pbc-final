@@ -23,48 +23,48 @@
 <!-- Admin Main Metrics Cards -->
 <div class="row mb-4">
     <div class="col-md-2">
-        <div class="card text-center border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #326C79, #4a8a95);">
-            <div class="card-body text-white">
+        <div class="card text-center border-0 shadow-sm h-100 bg-primary text-white">
+            <div class="card-body">
                 <h3 class="mb-1">{{ $metrics['total_users'] ?? 7 }}</h3>
                 <small class="opacity-90">Users</small>
             </div>
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card text-center border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #326C79, #4a8a95);">
-            <div class="card-body text-white">
+        <div class="card text-center border-0 shadow-sm h-100 bg-info text-white">
+            <div class="card-body">
                 <h3 class="mb-1">{{ $metrics['total_clients'] ?? 2 }}</h3>
                 <small class="opacity-90">Clients</small>
             </div>
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card text-center border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #326C79, #4a8a95);">
-            <div class="card-body text-white">
+        <div class="card text-center border-0 shadow-sm h-100 bg-primary text-white">
+            <div class="card-body">
                 <h3 class="mb-1">{{ $metrics['total_projects'] ?? 3 }}</h3>
                 <small class="opacity-90">Projects</small>
             </div>
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card text-center border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #326C79, #4a8a95);">
-            <div class="card-body text-white">
+        <div class="card text-center border-0 shadow-sm h-100 bg-warning text-dark">
+            <div class="card-body">
                 <h3 class="mb-1">{{ $metrics['active_requests'] ?? 3 }}</h3>
-                <small class="opacity-90">Active Request</small>
+                <small>Active Request</small>
             </div>
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card text-center border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #326C79, #4a8a95);">
-            <div class="card-body text-white">
+        <div class="card text-center border-0 shadow-sm h-100 bg-warning text-dark">
+            <div class="card-body">
                 <h3 class="mb-1">{{ $metrics['pending_documents'] ?? 3 }}</h3>
-                <small class="opacity-90">Pending Review</small>
+                <small>Pending Review</small>
             </div>
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card text-center border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #326C79, #4a8a95);">
-            <div class="card-body text-white">
+        <div class="card text-center border-0 shadow-sm h-100 bg-success text-white">
+            <div class="card-body">
                 <h3 class="mb-1">{{ $metrics['completed_requests'] ?? 3 }}</h3>
                 <small class="opacity-90">Completed</small>
             </div>
@@ -130,10 +130,10 @@
                                 </td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        <a href="{{ route('admin.users.show', $user) }}" class="btn btn-outline-primary btn-sm" title="View User">
+                                        <a href="{{ route('admin.users.show', $user) }}" class="btn btn-primary btn-sm" title="View User">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <a href="{{ route('admin.users.edit', $user) }}" class="btn btn-outline-warning btn-sm" title="Edit User">
+                                        <a href="{{ route('admin.users.edit', $user) }}" class="btn btn-warning btn-sm" title="Edit User">
                                             <i class="fas fa-edit"></i>
                                         </a>
                                     </div>
@@ -204,10 +204,10 @@
                                 <td>{{ $client->created_at->format('M d, Y') }}</td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        <a href="{{ route('admin.clients.show', $client) }}" class="btn btn-outline-primary btn-sm" title="View Client">
+                                        <a href="{{ route('admin.clients.show', $client) }}" class="btn btn-primary btn-sm" title="View Client">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <a href="{{ route('admin.clients.edit', $client) }}" class="btn btn-outline-warning btn-sm" title="Edit Client">
+                                        <a href="{{ route('admin.clients.edit', $client) }}" class="btn btn-warning btn-sm" title="Edit Client">
                                             <i class="fas fa-edit"></i>
                                         </a>
                                     </div>
@@ -282,10 +282,10 @@
                                 <td>{{ $project->created_at->format('M d, Y') }}</td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        <a href="{{ route('admin.projects.show', $project) }}" class="btn btn-outline-primary btn-sm" title="View Project">
+                                        <a href="{{ route('admin.projects.show', $project) }}" class="btn btn-primary btn-sm" title="View Project">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <a href="{{ route('admin.projects.edit', $project) }}" class="btn btn-outline-warning btn-sm" title="Edit Project">
+                                        <a href="{{ route('admin.projects.edit', $project) }}" class="btn btn-warning btn-sm" title="Edit Project">
                                             <i class="fas fa-edit"></i>
                                         </a>
                                     </div>
@@ -362,10 +362,10 @@
                                             'completed' => 'success',
                                             'in_progress' => 'warning',
                                             'overdue' => 'danger',
-                                            'pending' => 'secondary'
+                                            'pending' => 'warning'
                                         ];
                                         $displayStatus = $request->isOverdue() ? 'overdue' : $request->status;
-                                        $statusClass = $statusClasses[$displayStatus] ?? 'secondary';
+                                        $statusClass = $statusClasses[$displayStatus] ?? 'warning';
                                     @endphp
                                     <span class="badge bg-{{ $statusClass }}">
                                         {{ $displayStatus == 'overdue' ? 'Overdue' : ucfirst(str_replace('_', ' ', $request->status)) }}
@@ -374,11 +374,11 @@
                                 <td>{{ $request->created_at->format('M d, Y') }}</td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        <a href="{{ route('admin.pbc-requests.show', $request) }}" class="btn btn-outline-primary btn-sm" title="View Request">
+                                        <a href="{{ route('admin.pbc-requests.show', $request) }}" class="btn btn-primary btn-sm" title="View Request">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                         @if($request->status !== 'completed')
-                                            <button type="button" class="btn btn-outline-warning btn-sm" onclick="sendReminder({{ $request->id }})" title="Send Reminder">
+                                            <button type="button" class="btn btn-warning btn-sm" onclick="sendReminder({{ $request->id }})" title="Send Reminder">
                                                 <i class="fas fa-bell"></i>
                                             </button>
                                         @endif
@@ -401,7 +401,6 @@
         </div>
     </div>
 </div>
-
 
 <!-- Recent Uploaded Request -->
 <div class="row mb-4">
@@ -453,10 +452,10 @@
                                             'completed' => 'success',
                                             'in_progress' => 'warning',
                                             'overdue' => 'danger',
-                                            'pending' => 'secondary'
+                                            'pending' => 'warning'
                                         ];
                                         $displayStatus = $request->isOverdue() ? 'overdue' : $request->status;
-                                        $statusClass = $statusClasses[$displayStatus] ?? 'secondary';
+                                        $statusClass = $statusClasses[$displayStatus] ?? 'warning';
                                     @endphp
                                     <span class="badge bg-{{ $statusClass }}">
                                         {{ $displayStatus == 'overdue' ? 'Overdue' : ucfirst(str_replace('_', ' ', $request->status)) }}
@@ -464,11 +463,11 @@
                                 </td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        <a href="{{ route('admin.pbc-requests.show', $request) }}" class="btn btn-outline-primary btn-sm" title="View Request">
+                                        <a href="{{ route('admin.pbc-requests.show', $request) }}" class="btn btn-primary btn-sm" title="View Request">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                         @if($request->status !== 'completed')
-                                            <button type="button" class="btn btn-outline-warning btn-sm" onclick="sendReminder({{ $request->id }})" title="Send Reminder">
+                                            <button type="button" class="btn btn-warning btn-sm" onclick="sendReminder({{ $request->id }})" title="Send Reminder">
                                                 <i class="fas fa-bell"></i>
                                             </button>
                                         @endif
@@ -491,7 +490,6 @@
         </div>
     </div>
 </div>
-
 
 <!-- Recent Activity Log -->
 <div class="row mt-4">
@@ -524,7 +522,7 @@
                                     by {{ $request->creator->name ?? 'System' }}
                                 </p>
                                 <div class="timeline-actions">
-                                    <a href="{{ route('admin.pbc-requests.show', $request) }}" class="btn btn-outline-primary btn-sm">
+                                    <a href="{{ route('admin.pbc-requests.show', $request) }}" class="btn btn-primary btn-sm">
                                         View Details
                                     </a>
                                 </div>
@@ -548,10 +546,9 @@
 
 @section('styles')
 <style>
-/* Enhanced card styles */
+/* Card styles */
 .card {
     border-radius: 0.5rem;
-    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 /* Status card specific styling */
@@ -582,7 +579,6 @@
 /* Button improvements */
 .btn {
     font-weight: 500;
-    transition: all 0.2s;
     border-radius: 0.375rem;
 }
 
@@ -645,16 +641,6 @@
     color: #495057;
 }
 
-/* Alert list styling */
-.list-group-item {
-    border: none;
-    padding: 0.75rem 0;
-}
-
-.list-group-item:not(:last-child) {
-    border-bottom: 1px solid #e9ecef;
-}
-
 /* Responsive improvements */
 @media (max-width: 768px) {
     .col-md-2 {
@@ -679,12 +665,6 @@
     }
 }
 
-/* Loading states */
-.loading {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
 /* Animation for metrics */
 @keyframes countUp {
     from { opacity: 0; transform: translateY(10px); }
@@ -693,38 +673,6 @@
 
 .card-body h3, .card-body h4 {
     animation: countUp 0.5s ease-out;
-}
-
-/* Custom scrollbar for tables */
-.table-responsive::-webkit-scrollbar {
-    height: 8px;
-}
-
-.table-responsive::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.table-responsive::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 4px;
-}
-
-/* Empty state styling */
-.fa-inbox, .fa-clock, .fa-user-plus, .fa-building, .fa-project-diagram, .fa-file-alt {
-    opacity: 0.5;
-}
-
-/* Quick actions grid */
-.d-grid .btn {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Status consistency */
-.badge.bg-warning {
-    color: #000 !important;
 }
 
 /* Card header enhancements */
@@ -738,12 +686,6 @@
 @section('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
     // Auto-refresh dashboard every 5 minutes
     setInterval(refreshDashboard, 300000);
 

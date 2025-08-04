@@ -17,8 +17,8 @@ class FileUploadRequest extends FormRequest
             'file' => [
                 'required',
                 'file',
-                'max:51200', // 50MB
-                'mimes:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,zip,txt'
+                'max:307200',
+                'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,png,jpg,jpeg,zip,rar,txt,csv'
             ],
             'pbc_request_item_id' => ['required', 'exists:pbc_request_items,id'],
         ];
@@ -28,8 +28,8 @@ class FileUploadRequest extends FormRequest
     {
         return [
             'file.required' => 'Please select a file to upload.',
-            'file.max' => 'The file size cannot exceed 50MB.',
-            'file.mimes' => 'Only PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, JPEG, ZIP, and TXT files are allowed.',
+            'file.max' => 'The file size cannot exceed 300MB.',
+            'file.mimes' => 'Only PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, PNG, JPG, JPEG, ZIP, RAR, TXT, and CSV files are allowed.',
             'pbc_request_item_id.required' => 'Invalid request item.',
             'pbc_request_item_id.exists' => 'The request item does not exist.',
         ];

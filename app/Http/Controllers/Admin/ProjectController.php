@@ -8,16 +8,19 @@ use App\Models\Client;
 use App\Models\User;
 use App\Models\ProjectAssignment;
 use App\Services\ProjectAssignmentService;
+use App\Services\JobGenerationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectController extends Controller
 {
     protected $assignmentService;
+    protected $jobGenerationService;
 
-    public function __construct(ProjectAssignmentService $assignmentService)
+    public function __construct(ProjectAssignmentService $assignmentService, JobGenerationService $jobGenerationService)
     {
         $this->assignmentService = $assignmentService;
+        $this->jobGenerationService = $jobGenerationService;
     }
 
     public function index(Request $request)
@@ -32,6 +35,8 @@ class ProjectController extends Controller
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('job_id', 'like', "%{$search}%")
+                  ->orWhere('engagement_name', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
                   ->orWhereHas('client', function($clientQuery) use ($search) {
                       $clientQuery->where('company_name', 'like', "%{$search}%");
@@ -91,69 +96,76 @@ class ProjectController extends Controller
         $staffByRole = $this->assignmentService->getAvailableStaff();
         $project->load('assignments');
 
-        return view('admin.projects.edit', compact('project', 'clients', 'staffByRole'));
+        // Get suggested job ID for the form
+        $suggestedJobId = $project->getSuggestedJobId();
+
+        return view('admin.projects.edit', compact('project', 'clients', 'staffByRole', 'suggestedJobId'));
     }
 
     public function update(Request $request, Project $project)
     {
-        // Check user access using existing model method
-        if (!$project->canUserAccess(auth()->user())) {
-            abort(403, 'You do not have access to this project.');
-        }
-
         $request->validate([
-            'name' => 'required|string|max:255',
+            'job_id' => [
+                'nullable',
+                'string',
+                'max:50',
+                'unique:projects,job_id,' . $project->id,
+                function ($attribute, $value, $fail) {
+                    if ($value && !$this->jobGenerationService->isValidJobId($value)) {
+                        $fail('The job ID format is invalid. Expected format: ABC-22-001-A-24');
+                    }
+                },
+            ],
             'engagement_name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'client_id' => 'required|exists:clients,id',
             'engagement_type' => 'required|in:audit,accounting,tax,special_engagement,others',
-            'engagement_period_start' => 'nullable|date',
-            'engagement_period_end' => 'nullable|date|after_or_equal:engagement_period_start',
-            'status' => 'required|in:active,completed,on_hold,cancelled',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
-
-            // Team assignments
+            'engagement_period_start' => 'nullable|date',
+            'engagement_period_end' => 'nullable|date|after_or_equal:engagement_period_start',
+            'status' => 'required|in:active,on_hold,completed,cancelled',
             'engagement_partner' => 'nullable|exists:users,id',
             'manager' => 'nullable|exists:users,id',
             'associate_1' => 'nullable|exists:users,id',
             'associate_2' => 'nullable|exists:users,id',
         ]);
 
-        // Verify user can access the selected client
-        $client = Client::findOrFail($request->client_id);
-        if (!$this->canAccessClient($client)) {
-            abort(403, 'You do not have access to this client.');
+        // Generate job ID if not provided
+        $jobId = $request->job_id;
+        if (empty($jobId)) {
+            $jobYear = null;
+            if ($request->engagement_period_start) {
+                $jobYear = \Carbon\Carbon::parse($request->engagement_period_start)->year;
+            }
+
+            $jobId = $this->jobGenerationService->generateUniqueJobId(
+                $request->client_id,
+                $request->engagement_type,
+                $jobYear,
+                $project->id
+            );
         }
 
-        DB::transaction(function () use ($request, $project) {
-            // Update project
-            $project->update([
-                'name' => $request->name,
-                'engagement_name' => $request->engagement_name,
-                'description' => $request->description,
-                'client_id' => $request->client_id,
-                'engagement_type' => $request->engagement_type,
-                'engagement_period_start' => $request->engagement_period_start,
-                'engagement_period_end' => $request->engagement_period_end,
-                'status' => $request->status,
-                'start_date' => $request->start_date,
-                'end_date' => $request->end_date,
-            ]);
+        // Update project basic information
+        $project->update([
+            'job_id' => $jobId,
+            'engagement_name' => $request->engagement_name,
+            'name' => $request->engagement_name, // Use engagement_name as name
+            'description' => $request->description,
+            'client_id' => $request->client_id,
+            'engagement_type' => $request->engagement_type,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'engagement_period_start' => $request->engagement_period_start,
+            'engagement_period_end' => $request->engagement_period_end,
+            'status' => $request->status,
+        ]);
 
-            // Update team assignments
-            $assignments = [
-                'engagement_partner' => $request->engagement_partner,
-                'manager' => $request->manager,
-                'associate_1' => $request->associate_1,
-                'associate_2' => $request->associate_2,
-            ];
+        $this->updateTeamAssignments($project, $request);
 
-            $this->assignmentService->updateProjectTeam($project, $assignments);
-        });
-
-        return redirect()
-            ->route('admin.projects.show', $project)
+        // Redirect to projects index instead of show
+        return redirect()->route('admin.projects.index')
             ->with('success', 'Project updated successfully.');
     }
 
@@ -283,39 +295,6 @@ class ProjectController extends Controller
             ->exists();
     }
 
-    /**
-     * Generate unique job ID based on engagement type
-     */
-    private function generateJobId($engagementType)
-    {
-        $typeMap = [
-            'audit' => '1',
-            'accounting' => '2',
-            'tax' => '3',
-            'special_engagement' => '4',
-            'others' => '5'
-        ];
-
-        $typeCode = $typeMap[$engagementType] ?? '9';
-        $currentYear = date('y'); // Get 2-digit year
-
-        // Get the next sequence number for this type and year
-        $lastProject = Project::where('job_id', 'like', "{$typeCode}-{$currentYear}-%")
-            ->orderBy('job_id', 'desc')
-            ->first();
-
-        if ($lastProject) {
-            $lastJobId = $lastProject->job_id;
-            $parts = explode('-', $lastJobId);
-            $lastSequence = intval($parts[2] ?? 0);
-            $nextSequence = $lastSequence + 1;
-        } else {
-            $nextSequence = 1;
-        }
-
-        return sprintf('%s-%s-%03d', $typeCode, $currentYear, $nextSequence);
-    }
-
     public function create(Request $request)
     {
         // Check permission
@@ -323,9 +302,10 @@ class ProjectController extends Controller
             abort(403, 'You do not have permission to create projects.');
         }
 
-        // NEW: Handle pre-selected client from wireframe workflow
+        // Handle pre-selected client from wireframe workflow
         $preselectedClientId = $request->get('client_id');
         $preselectedClient = null;
+        $suggestedJobId = null;
 
         if ($preselectedClientId) {
             $preselectedClient = Client::find($preselectedClientId);
@@ -339,96 +319,184 @@ class ProjectController extends Controller
         $staffByRole = $this->assignmentService->getAvailableStaff();
 
         return view('admin.projects.create', compact(
-            'clients', 'staffByRole', 'preselectedClient'
+            'clients', 'staffByRole', 'preselectedClient', 'suggestedJobId'
         ));
     }
 
-    // FIXED: Complete store method with proper validation and field mapping
+    // Updated store method with new job ID generation
     public function store(Request $request)
     {
-        // Check permission
-        if (!auth()->user()->canCreateProjects()) {
-            abort(403, 'You do not have permission to create projects.');
-        }
-
-        // FIXED: Proper validation matching your form fields
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'engagement_name' => 'required|string|max:255',
-            'description' => 'nullable|string',
+        $validatedData = $request->validate([
             'client_id' => 'required|exists:clients,id',
-            'engagement_type' => 'required|in:audit,accounting,tax,special_engagement,others',
-            'engagement_period' => 'nullable|string|max:255',
-            'status' => 'required|in:active,completed,on_hold,cancelled',
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
-
-            // Team assignments - matching your form field names
+            'name' => 'required|string|max:255',
+            'job_id' => [
+                'nullable',
+                'string',
+                'max:50',
+                'unique:projects,job_id',
+                function ($attribute, $value, $fail) {
+                    if ($value && !$this->jobGenerationService->isValidJobId($value)) {
+                        $fail('The job ID format is invalid. Expected format: ABC-22-001-A-24');
+                    }
+                },
+            ],
+            'engagement_name' => 'required|string|max:255',
+            'engagement_type' => 'required|string|in:audit,accounting,tax,special_engagement,others',
+            'engagement_period_start' => 'nullable|date',
+            'engagement_period_end' => 'nullable|date|after_or_equal:engagement_period_start',
             'engagement_partner_id' => 'nullable|exists:users,id',
             'manager_id' => 'nullable|exists:users,id',
             'associate_1' => 'nullable|exists:users,id',
             'associate_2' => 'nullable|exists:users,id',
-
-            // Job ID should be generated, not required from form
-            'job_id' => 'nullable|string|max:255',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'status' => 'required|in:active,on_hold,completed,cancelled',
         ]);
 
-        // Verify user can access the selected client
-        $client = Client::findOrFail($request->client_id);
-        if (!$this->canAccessClient($client)) {
-            abort(403, 'You do not have access to this client.');
+        // Set created_by
+        $validatedData['created_by'] = auth()->id();
+        $validatedData['description'] = null;
+
+        // Generate job ID if not provided
+        if (empty($validatedData['job_id'])) {
+            $jobYear = null;
+            if (!empty($validatedData['engagement_period_start'])) {
+                $jobYear = \Carbon\Carbon::parse($validatedData['engagement_period_start'])->year;
+            }
+
+            $validatedData['job_id'] = $this->jobGenerationService->generateUniqueJobId(
+                $validatedData['client_id'],
+                $validatedData['engagement_type'],
+                $jobYear
+            );
         }
 
-        DB::transaction(function () use ($validated, $request) {
-            // Generate job ID if not provided
-            if (empty($validated['job_id'])) {
-                $validated['job_id'] = $this->generateJobId($validated['engagement_type']);
-            }
-
-            // Set created_by
-            $validated['created_by'] = auth()->id();
-
-            // FIXED: Map engagement_period to the correct database fields
-            if ($validated['engagement_period']) {
-                // You might want to parse this into start/end dates or store as text
-                $validated['engagement_period_start'] = $validated['start_date'];
-                $validated['engagement_period_end'] = $validated['end_date'];
-            }
-
+        try {
             // Create the project
-            $project = Project::create([
-                'name' => $validated['name'],
-                'engagement_name' => $validated['engagement_name'],
-                'description' => $validated['description'],
-                'client_id' => $validated['client_id'],
-                'engagement_type' => $validated['engagement_type'],
-                'engagement_period' => $validated['engagement_period'],
-                'engagement_period_start' => $validated['engagement_period_start'] ?? null,
-                'engagement_period_end' => $validated['engagement_period_end'] ?? null,
-                'status' => $validated['status'],
-                'start_date' => $validated['start_date'],
-                'end_date' => $validated['end_date'],
-                'job_id' => $validated['job_id'],
-                'created_by' => $validated['created_by'],
-            ]);
+            $project = Project::create($validatedData);
 
-            // FIXED: Handle team assignments using the assignment service
-            $assignments = [
-                'engagement_partner' => $validated['engagement_partner_id'] ?? null,
-                'manager' => $validated['manager_id'] ?? null,
-                'associate_1' => $validated['associate_1'] ?? null,
-                'associate_2' => $validated['associate_2'] ?? null,
-            ];
-
-            // Only update team if we have assignments
-            $hasAssignments = array_filter($assignments);
-            if (!empty($hasAssignments)) {
-                $this->assignmentService->updateProjectTeam($project, $assignments);
+            // Handle team assignments if provided
+            if (!empty($validatedData['associate_1'])) {
+                ProjectAssignment::create([
+                    'project_id' => $project->id,
+                    'user_id' => $validatedData['associate_1'],
+                    'role' => ProjectAssignment::ROLE_ASSOCIATE_1,
+                ]);
             }
-        });
 
-        return redirect()
-            ->route('admin.projects.index')
-            ->with('success', 'Project created successfully.');
+            if (!empty($validatedData['associate_2'])) {
+                ProjectAssignment::create([
+                    'project_id' => $project->id,
+                    'user_id' => $validatedData['associate_2'],
+                    'role' => ProjectAssignment::ROLE_ASSOCIATE_2,
+                ]);
+            }
+
+            // Sync team assignments
+            $project->syncTeamAssignments();
+
+            if (request()->has('client_id') && request('from') === 'client') {
+                return redirect()
+                    ->route('admin.clients.show', $validatedData['client_id'])
+                    ->with('success', 'Project created successfully with Job ID: ' . $project->job_id);
+            }
+
+            return redirect()
+                ->route('admin.projects.index')
+                ->with('success', 'Project created successfully with Job ID: ' . $project->job_id);
+
+        } catch (\Exception $e) {
+            \Log::error('Project creation failed: ' . $e->getMessage());
+
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('error', 'Failed to create project. Please try again.');
+        }
+    }
+
+    /**
+     * Get suggested job ID via AJAX
+     */
+    public function getSuggestedJobId(Request $request)
+    {
+        $request->validate([
+            'client_id' => 'required|exists:clients,id',
+            'engagement_type' => 'required|in:audit,accounting,tax,special_engagement,others',
+            'engagement_period_start' => 'nullable|date',
+        ]);
+
+        $jobYear = null;
+        if ($request->engagement_period_start) {
+            $jobYear = \Carbon\Carbon::parse($request->engagement_period_start)->year;
+        }
+
+        $suggestedJobId = $this->jobGenerationService->generateUniqueJobId(
+            $request->client_id,
+            $request->engagement_type,
+            $jobYear
+        );
+
+        return response()->json([
+            'success' => true,
+            'job_id' => $suggestedJobId,
+            'breakdown' => $this->jobGenerationService->parseJobId($suggestedJobId)
+        ]);
+    }
+
+    /**
+     * Validate job ID format via AJAX
+     */
+    public function validateJobId(Request $request)
+    {
+        $request->validate([
+            'job_id' => 'required|string',
+            'project_id' => 'nullable|exists:projects,id'
+        ]);
+
+        $jobId = $request->job_id;
+        $projectId = $request->project_id;
+
+        $isValid = $this->jobGenerationService->isValidJobId($jobId);
+        $isUnique = $this->jobGenerationService->isJobIdUnique($jobId, $projectId);
+
+        $response = [
+            'valid' => $isValid,
+            'unique' => $isUnique,
+            'message' => ''
+        ];
+
+        if (!$isValid) {
+            $response['message'] = 'Invalid Job ID format. Expected format: ABC-22-001-A-24';
+        } elseif (!$isUnique) {
+            $response['message'] = 'Job ID already exists. Please use a different ID.';
+        } else {
+            $response['message'] = 'Job ID is valid and available.';
+            $response['breakdown'] = $this->jobGenerationService->parseJobId($jobId);
+        }
+
+        return response()->json($response);
+    }
+
+    // Helper method to update team assignments
+    private function updateTeamAssignments(Project $project, Request $request)
+    {
+        $roles = ['engagement_partner', 'manager', 'associate_1', 'associate_2'];
+
+        foreach ($roles as $role) {
+            $userId = $request->input($role);
+
+            // Remove existing assignment for this role
+            $project->assignments()->where('role', $role)->delete();
+
+            // Add new assignment if user is selected
+            if ($userId) {
+                $project->assignments()->create([
+                    'user_id' => $userId,
+                    'role' => $role,
+                    'assigned_by' => auth()->id(),
+                ]);
+            }
+        }
     }
 }

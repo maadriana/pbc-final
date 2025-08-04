@@ -316,50 +316,342 @@ class PbcRequestController extends Controller
             ->with('success', "Document '{$document->original_filename}' {$action} successfully.");
     }
 
+    // FIXED: Approve item method
+    public function approveItem(PbcRequestItem $item)
+    {
+        if (!auth()->user()->canReviewDocuments()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to approve documents.'
+            ], 403);
+        }
+
+        // Check if user has access to this project
+        if (!$this->canAccessPbcRequest($item->pbcRequest)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have access to this project.'
+            ], 403);
+        }
+
+        // Find the latest uploaded document for this item
+        $document = $item->documents()->where('status', 'uploaded')->latest()->first();
+
+        if (!$document) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No uploaded document found for this item.'
+            ]);
+        }
+
+        try {
+            DB::transaction(function () use ($item, $document) {
+                $document->update([
+                    'status' => 'approved',
+                    'approved_at' => now(),
+                    'approved_by' => auth()->id(),
+                ]);
+
+                $item->update([
+                    'status' => 'approved',
+                    'reviewed_at' => now(),
+                    'reviewed_by' => auth()->id(),
+                ]);
+            });
+
+            $this->updateRequestStatus($item->pbcRequest);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Item approved successfully.'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error approving item', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+                'user_id' => auth()->id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to approve item: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // FIXED: Reject item method
+public function rejectItem(Request $request, Client $client, Project $project, PbcRequest $pbcRequest, PbcRequestItem $item)
+{
+    // FIXED: Updated validation - the form sends 'reason', not 'admin_notes'
+    $request->validate([
+        'reason' => 'required|string|max:500'
+    ], [
+        'reason.required' => 'Please provide a reason for rejection.'
+    ]);
+
+    if (!auth()->user()->canReviewDocuments()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'You do not have permission to reject documents.'
+        ], 403);
+    }
+
+    // Check if user has access to this project
+    if (!$this->canAccessPbcRequest($pbcRequest)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'You do not have access to this project.'
+        ], 403);
+    }
+
+    // Verify the relationships
+    if ($pbcRequest->client_id !== $client->id ||
+        $pbcRequest->project_id !== $project->id ||
+        $item->pbc_request_id !== $pbcRequest->id) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Invalid request parameters.'
+        ], 403);
+    }
+
+    try {
+        // Get the latest uploaded or approved document for this item
+        $document = $item->documents()
+            ->whereIn('status', ['uploaded', 'approved'])
+            ->latest()
+            ->first();
+
+        if (!$document) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No document found to reject for this item.'
+            ]);
+        }
+
+        DB::transaction(function () use ($item, $document, $request) {
+            // Update the document status
+            $document->update([
+                'status' => 'rejected',
+                'admin_notes' => $request->reason,
+                'approved_by' => auth()->id(),
+                'approved_at' => null,
+            ]);
+
+            // Update the item status
+            $item->update([
+                'status' => 'rejected',
+                'reviewed_at' => now(),
+                'reviewed_by' => auth()->id(),
+            ]);
+
+            Log::info('Document rejected successfully', [
+                'item_id' => $item->id,
+                'document_id' => $document->id,
+                'reason' => $request->reason,
+                'rejected_by' => auth()->id()
+            ]);
+        });
+
+        // Update the overall request status
+        $this->updateRequestStatus($pbcRequest);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Document rejected successfully.'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error rejecting item', [
+            'item_id' => $item->id,
+            'request_id' => $pbcRequest->id,
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'user_id' => auth()->id()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to reject document. Please try again.'
+        ], 500);
+    }
+}
+/**
+ * Global reject item method (for index page)
+ */
+public function rejectItemGlobal(Request $request, PbcRequestItem $item)
+{
+    // Validate the request
+    $request->validate([
+        'reason' => 'required|string|max:500'
+    ], [
+        'reason.required' => 'Please provide a reason for rejection.'
+    ]);
+
+    if (!auth()->user()->canReviewDocuments()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'You do not have permission to reject documents.'
+        ], 403);
+    }
+
+    // Check if user has access to this project
+    if (!$this->canAccessPbcRequest($item->pbcRequest)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'You do not have access to this project.'
+        ], 403);
+    }
+
+    try {
+        // Get the latest uploaded or approved document for this item
+        $document = $item->documents()
+            ->whereIn('status', ['uploaded', 'approved'])
+            ->latest()
+            ->first();
+
+        if (!$document) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No document found to reject for this item.'
+            ]);
+        }
+
+        DB::transaction(function () use ($item, $document, $request) {
+            // Update the document status
+            $document->update([
+                'status' => 'rejected',
+                'admin_notes' => $request->reason,
+                'approved_by' => auth()->id(),
+                'approved_at' => null,
+            ]);
+
+            // Update the item status
+            $item->update([
+                'status' => 'rejected',
+                'reviewed_at' => now(),
+                'reviewed_by' => auth()->id(),
+            ]);
+
+            Log::info('Document rejected successfully (global)', [
+                'item_id' => $item->id,
+                'document_id' => $document->id,
+                'reason' => $request->reason,
+                'rejected_by' => auth()->id()
+            ]);
+        });
+
+        // Update the overall request status
+        $this->updateRequestStatus($item->pbcRequest);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Document rejected successfully.'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error rejecting item (global)', [
+            'item_id' => $item->id,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'user_id' => auth()->id()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to reject document. Please try again.'
+        ], 500);
+    }
+}
+    // FIXED: Get item files method
+    public function getItemFiles(PbcRequestItem $item)
+    {
+        // Check if user has access to this project
+        if (!$this->canAccessPbcRequest($item->pbcRequest)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have access to this project.'
+            ], 403);
+        }
+
+        try {
+            $files = $item->documents()->with('uploader')->latest()->get()->map(function($doc) {
+                return [
+                    'id' => $doc->id,
+                    'original_filename' => $doc->original_filename,
+                    'file_size' => $doc->getFileSizeFormatted(),
+                    'status' => $doc->status,
+                    'uploaded_at' => $doc->created_at->format('M d, Y H:i'),
+                    'uploader' => $doc->uploader->name ?? 'Unknown',
+                    'admin_notes' => $doc->admin_notes
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'files' => $files
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting item files', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+                'user_id' => auth()->id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load files.'
+            ], 500);
+        }
+    }
+
     /**
      * Project-specific PBC request index page
      */
     public function projectIndex(Client $client, Project $project)
-{
-    if (!$this->canAccessClient($client) || !$this->canAccessProject($project->id)) {
-        abort(403, 'You do not have permission to view this project.');
+    {
+        if (!$this->canAccessClient($client) || !$this->canAccessProject($project->id)) {
+            abort(403, 'You do not have permission to view this project.');
+        }
+
+        if ($project->client_id !== $client->id) {
+            abort(404, 'Project not found for this client.');
+        }
+
+        // Get all PBC request items for this project (flatten the structure)
+        $requests = PbcRequest::with(['creator', 'items.documents'])
+            ->where('client_id', $client->id)
+            ->where('project_id', $project->id)
+            ->latest()
+            ->get(); // Using get() instead of paginate() to avoid hasPages error
+
+        // Calculate stats
+        $stats = [
+            'total_requests' => $requests->sum(function($request) {
+                return $request->items->count();
+            }),
+            'pending' => $requests->sum(function($request) {
+                return $request->items->where('status', 'pending')->count();
+            }),
+            'in_progress' => $requests->sum(function($request) {
+                return $request->items->filter(function($item) {
+                    return $item->getCurrentStatus() === 'uploaded';
+                })->count();
+            }),
+            'completed' => $requests->sum(function($request) {
+                return $request->items->filter(function($item) {
+                    return $item->getCurrentStatus() === 'approved';
+                })->count();
+            }),
+        ];
+
+        return view('admin.clients.projects.pbc-requests.index', compact(
+            'client', 'project', 'requests', 'stats'
+        ));
     }
-
-    if ($project->client_id !== $client->id) {
-        abort(404, 'Project not found for this client.');
-    }
-
-    // Get all PBC request items for this project (flatten the structure)
-    $requests = PbcRequest::with(['creator', 'items.documents'])
-        ->where('client_id', $client->id)
-        ->where('project_id', $project->id)
-        ->latest()
-        ->get(); // Using get() instead of paginate() to avoid hasPages error
-
-    // Calculate stats
-    $stats = [
-        'total_requests' => $requests->sum(function($request) {
-            return $request->items->count();
-        }),
-        'pending' => $requests->sum(function($request) {
-            return $request->items->where('status', 'pending')->count();
-        }),
-        'in_progress' => $requests->sum(function($request) {
-            return $request->items->filter(function($item) {
-                return $item->getCurrentStatus() === 'uploaded';
-            })->count();
-        }),
-        'completed' => $requests->sum(function($request) {
-            return $request->items->filter(function($item) {
-                return $item->getCurrentStatus() === 'approved';
-            })->count();
-        }),
-    ];
-
-    return view('admin.clients.projects.pbc-requests.index', compact(
-        'client', 'project', 'requests', 'stats'
-    ));
-}
 
     /**
      * Project-specific PBC request creation page
@@ -477,12 +769,12 @@ class PbcRequestController extends Controller
     }
 
     /**
-     * Show project import form
+     * Project-specific edit page
      */
-    public function projectImport(Client $client, Project $project)
+    public function projectEdit(Client $client, Project $project)
     {
         if (!auth()->user()->canCreatePbcRequests()) {
-            abort(403, 'You do not have permission to import PBC requests.');
+            abort(403, 'You do not have permission to edit PBC requests.');
         }
 
         if (!$this->canAccessClient($client) || !$this->canAccessProject($project->id)) {
@@ -493,153 +785,157 @@ class PbcRequestController extends Controller
             abort(404, 'Project not found for this client.');
         }
 
-        return view('admin.clients.projects.pbc-requests.import', compact('client', 'project'));
+        // Get all PBC requests for this project
+        $requests = PbcRequest::with(['items.documents'])
+            ->where('client_id', $client->id)
+            ->where('project_id', $project->id)
+            ->latest()
+            ->get();
+
+        return view('admin.clients.projects.pbc-requests.edit', compact(
+            'client', 'project', 'requests'
+        ));
     }
 
     /**
-     * Preview project import
+     * Project-specific update method
      */
-    public function projectImportPreview(Request $request, Client $client, Project $project)
-    {
-        $request->validate([
-            'excel_file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string|max:1000',
-            'due_date' => 'nullable|date|after_or_equal:today',
-        ]);
+    public function projectUpdate(Request $request, Client $client, Project $project)
+{
+    // Updated validation rules
+    $request->validate([
+        'items' => 'nullable|array',
+        'items.*.particulars' => 'required|string|max:500',
+        'items.*.category' => 'required|in:CF,PF',
+        'items.*.is_required' => 'nullable|boolean',
+        'new_items' => 'nullable|array',
+        'new_items.*.particulars' => 'required|string|max:500',
+        'new_items.*.category' => 'required|in:CF,PF',
+        'new_items.*.is_required' => 'nullable|boolean',
+        'delete_items' => 'nullable|array',
+        'delete_items.*' => 'exists:pbc_request_items,id'
+    ], [
+        // Custom error messages
+        'new_items.*.particulars.required' => 'Please fill out the particulars field for new items.',
+        'new_items.*.category.required' => 'Please select a category for new items.',
+        'new_items.*.category.in' => 'Category must be either CF or PF.',
+        'items.*.particulars.required' => 'Please fill out the particulars field.',
+        'items.*.category.required' => 'Please select a category.',
+        'items.*.category.in' => 'Category must be either CF or PF.',
+    ]);
 
-        if (!$this->canAccessClient($client) || !$this->canAccessProject($project->id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You do not have permission to access this project.'
-            ], 403);
-        }
-
-        try {
-            $file = $request->file('excel_file');
-            $data = $this->processImportFile($file);
-
-            if (empty($data)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No valid data found in the file.'
-                ]);
-            }
-
-            session(['import_preview_data' => [
-                'project_id' => $project->id,
-                'client_id' => $client->id,
-                'title' => $request->title,
-                'description' => $request->description,
-                'due_date' => $request->due_date,
-                'items' => $data,
-                'file_name' => $file->getClientOriginalName(),
-            ]]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $data,
-                'count' => count($data)
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Project import preview error', [
-                'error' => $e->getMessage(),
-                'client_id' => $client->id,
-                'project_id' => $project->id,
-                'user_id' => auth()->id()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to process file: ' . $e->getMessage()
-            ]);
-        }
+    if (!auth()->user()->canCreatePbcRequests()) {
+        return redirect()->back()
+            ->with('error', 'You do not have permission to edit PBC requests.');
     }
 
-    /**
-     * Execute project import
-     */
-    public function projectImportExecute(Request $request, Client $client, Project $project)
-    {
-        if (!session()->has('import_preview_data')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No preview data found. Please preview first.'
-            ]);
-        }
+    if (!$this->canAccessClient($client) || !$this->canAccessProject($project->id)) {
+        return redirect()->back()
+            ->with('error', 'You do not have permission to access this project.');
+    }
 
-        $previewData = session('import_preview_data');
+    try {
+        DB::transaction(function () use ($request, $client, $project) {
+            // Update existing items
+            if ($request->has('items') && is_array($request->items)) {
+                foreach ($request->items as $itemId => $itemData) {
+                    // Skip if itemId is not numeric (could be placeholder)
+                    if (!is_numeric($itemId)) {
+                        continue;
+                    }
 
-        if (!$this->canAccessClient($client) || !$this->canAccessProject($project->id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You do not have permission to access this project.'
-            ], 403);
-        }
-
-        try {
-            DB::transaction(function () use ($previewData, $client, $project) {
-                $pbcRequest = PbcRequest::create([
-                    'client_id' => $client->id,
-                    'project_id' => $project->id,
-                    'title' => $previewData['title'],
-                    'description' => $previewData['description'],
-                    'due_date' => $previewData['due_date'],
-                    'status' => 'pending',
-                    'created_by' => auth()->id(),
-                ]);
-
-                foreach ($previewData['items'] as $index => $item) {
-                    if (!empty(trim($item['particulars']))) {
-                        PbcRequestItem::create([
-                            'pbc_request_id' => $pbcRequest->id,
-                            'category' => $item['category'],
-                            'particulars' => trim($item['particulars']),
-                            'assigned_to' => $item['assigned_to'] ?? null,
-                            'date_requested' => now()->toDateString(),
-                            'due_date' => $item['due_date'],
-                            'is_required' => $item['is_required'] ?? true,
-                            'status' => 'pending',
-                            'order_index' => $index,
-                            'requestor' => auth()->user()->name,
-                        ]);
+                    $item = PbcRequestItem::find($itemId);
+                    if ($item && $item->pbcRequest->project_id == $project->id) {
+                        // Only update if no files uploaded
+                        if ($item->documents->count() == 0) {
+                            $item->update([
+                                'particulars' => trim($itemData['particulars']),
+                                'category' => $itemData['category'],
+                                'is_required' => isset($itemData['is_required']) ? true : false,
+                            ]);
+                        }
                     }
                 }
+            }
 
-                Log::info('Project PBC Request imported successfully', [
-                    'pbc_request_id' => $pbcRequest->id,
-                    'client_id' => $client->id,
-                    'project_id' => $project->id,
-                    'items_count' => count($previewData['items']),
-                    'file_name' => $previewData['file_name'],
-                    'created_by' => auth()->id()
-                ]);
-            });
+            // Delete items (only if no files uploaded)
+            if ($request->has('delete_items') && is_array($request->delete_items)) {
+                foreach ($request->delete_items as $itemId) {
+                    if (!is_numeric($itemId)) {
+                        continue;
+                    }
 
-            session()->forget('import_preview_data');
+                    $item = PbcRequestItem::find($itemId);
+                    if ($item && $item->pbcRequest->project_id == $project->id && $item->documents->count() == 0) {
+                        $item->delete();
+                    }
+                }
+            }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Import completed successfully!'
-            ]);
+            // Add new items
+            if ($request->has('new_items') && is_array($request->new_items)) {
+                // Create a new PBC request for new items or add to existing
+                $pbcRequest = PbcRequest::where('client_id', $client->id)
+                    ->where('project_id', $project->id)
+                    ->latest()
+                    ->first();
 
-        } catch (\Exception $e) {
-            Log::error('Project import execution error', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                if (!$pbcRequest) {
+                    $pbcRequest = PbcRequest::create([
+                        'client_id' => $client->id,
+                        'project_id' => $project->id,
+                        'title' => 'Additional PBC Request Items',
+                        'status' => 'pending',
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+
+                $orderIndex = $pbcRequest->items()->count();
+
+                foreach ($request->new_items as $index => $newItem) {
+                    // Skip placeholder entries or empty items
+                    if (!is_array($newItem) || empty(trim($newItem['particulars'] ?? ''))) {
+                        continue;
+                    }
+
+                    PbcRequestItem::create([
+                        'pbc_request_id' => $pbcRequest->id,
+                        'category' => $newItem['category'],
+                        'particulars' => trim($newItem['particulars']),
+                        'date_requested' => now()->toDateString(),
+                        'is_required' => isset($newItem['is_required']) ? true : false,
+                        'status' => 'pending',
+                        'order_index' => $orderIndex++,
+                        'requestor' => auth()->user()->name,
+                    ]);
+                }
+            }
+
+            Log::info('PBC Request items updated successfully', [
                 'client_id' => $client->id,
                 'project_id' => $project->id,
-                'user_id' => auth()->id()
+                'updated_by' => auth()->id()
             ]);
+        });
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to import: ' . $e->getMessage()
-            ]);
-        }
+        return redirect()
+            ->route('admin.clients.projects.pbc-requests.index', [$client, $project])
+            ->with('success', 'PBC Request items updated successfully.');
+
+    } catch (\Exception $e) {
+        Log::error('Error updating PBC Request items', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'user_id' => auth()->id()
+        ]);
+
+        return redirect()->back()
+            ->with('error', 'Failed to update PBC Request items. Please try again.')
+            ->withInput();
     }
-
+}
     // Helper methods
     private function updateRequestStatus(PbcRequest $pbcRequest)
     {

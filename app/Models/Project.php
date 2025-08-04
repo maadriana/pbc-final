@@ -12,16 +12,16 @@ class Project extends Model
     use HasFactory;
 
     protected $fillable = [
-        'job_id',                    // NEW: Job ID field
+        'job_id',                    // Job ID field
         'name',
-        'engagement_name',           // NEW: Separate engagement name
+        'engagement_name',           // Separate engagement name
         'description',
         'client_id',
         'engagement_type',
         'engagement_period_start',
         'engagement_period_end',
-        'engagement_partner_id',     // NEW: Direct reference
-        'manager_id',               // NEW: Direct reference
+        'engagement_partner_id',     // Direct reference
+        'manager_id',               // Direct reference
         'contact_persons',
         'status',
         'start_date',
@@ -60,18 +60,48 @@ class Project extends Model
         ];
     }
 
-    // NEW: Boot method to auto-generate job_id
+    // Updated Boot method to auto-generate job_id with new format
     protected static function boot()
-{
-    parent::boot();
+    {
+        parent::boot();
 
-    static::creating(function ($project) {
-        if (empty($project->job_id) && !empty($project->engagement_type)) {
-            $jobService = app(\App\Services\JobGenerationService::class);
-            $project->job_id = $jobService->generateJobId($project->engagement_type);
-        }
-    });
-}
+        static::creating(function ($project) {
+            if (empty($project->job_id) && !empty($project->engagement_type) && !empty($project->client_id)) {
+                $jobService = app(\App\Services\JobGenerationService::class);
+
+                // Get job year from engagement period or current year
+                $jobYear = null;
+                if ($project->engagement_period_start) {
+                    $jobYear = $project->engagement_period_start->year;
+                }
+
+                $project->job_id = $jobService->generateUniqueJobId(
+                    $project->client_id,
+                    $project->engagement_type,
+                    $jobYear
+                );
+            }
+        });
+
+        static::updating(function ($project) {
+            // Regenerate job ID if key fields changed and job_id is empty
+            if (empty($project->job_id) && $project->isDirty(['engagement_type', 'client_id', 'engagement_period_start'])) {
+                $jobService = app(\App\Services\JobGenerationService::class);
+
+                $jobYear = null;
+                if ($project->engagement_period_start) {
+                    $jobYear = $project->engagement_period_start->year;
+                }
+
+                $project->job_id = $jobService->generateUniqueJobId(
+                    $project->client_id,
+                    $project->engagement_type,
+                    $jobYear,
+                    $project->id
+                );
+            }
+        });
+    }
 
     // Relationships
     public function client()
@@ -84,7 +114,7 @@ class Project extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    // NEW: Direct relationships to engagement partner and manager
+    // Direct relationships to engagement partner and manager
     public function engagementPartner()
     {
         return $this->belongsTo(User::class, 'engagement_partner_id');
@@ -206,31 +236,49 @@ class Project extends Model
         return $this->isUserAssigned($user);
     }
 
-    // NEW: Job ID related methods
+    // Updated Job ID related methods for new format
     public function getJobIdParts()
-{
-    $jobService = app(\App\Services\JobGenerationService::class);
-    return $jobService->parseJobId($this->job_id);
-}
+    {
+        $jobService = app(\App\Services\JobGenerationService::class);
+        return $jobService->parseJobId($this->job_id);
+    }
 
-public function getJobDisplayName()
-{
-    return "{$this->job_id} - {$this->engagement_name}";
-}
+    public function getJobDisplayName()
+    {
+        return "{$this->job_id} - {$this->engagement_name}";
+    }
 
-public function getEngagementYear()
-{
-    $parts = $this->getJobIdParts();
-    return $parts['year'] ?? null;
-}
+    public function getEngagementYear()
+    {
+        $parts = $this->getJobIdParts();
+        return $parts['full_year_of_job'] ?? null;
+    }
 
-public function getSequenceNumber()
-{
-    $parts = $this->getJobIdParts();
-    return $parts['sequence'] ?? null;
-}
+    public function getSequenceNumber()
+    {
+        $parts = $this->getJobIdParts();
+        return $parts['series'] ?? null;
+    }
 
-    // NEW: Update sync methods to maintain both direct and assignment relationships
+    public function getClientInitialFromJobId()
+    {
+        $parts = $this->getJobIdParts();
+        return $parts['client_initial'] ?? null;
+    }
+
+    public function getJobTypeFromJobId()
+    {
+        $parts = $this->getJobIdParts();
+        return $parts['job_type_code'] ?? null;
+    }
+
+    public function getYearEngagedFromJobId()
+    {
+        $parts = $this->getJobIdParts();
+        return $parts['full_year_engaged'] ?? null;
+    }
+
+    // Updated sync methods to maintain both direct and assignment relationships
     public function syncTeamAssignments()
     {
         // Sync direct relationships with assignment table
@@ -249,9 +297,64 @@ public function getSequenceNumber()
         }
     }
 
-    // NEW: Accessor for wireframe compatibility
+    // Accessor for wireframe compatibility
     public function getJobCodeAttribute()
     {
         return $this->job_id;
+    }
+
+    // New accessor for formatted job display
+    public function getFormattedJobIdAttribute()
+    {
+        return $this->job_id;
+    }
+
+    // Get job ID breakdown for display
+    public function getJobIdBreakdownAttribute()
+    {
+        $parts = $this->getJobIdParts();
+
+        if (empty($parts)) {
+            return null;
+        }
+
+        return [
+            'client_initial' => $parts['client_initial'],
+            'year_engaged' => $parts['full_year_engaged'],
+            'series' => $parts['series'],
+            'job_type' => $this->getEngagementTypeDisplayAttribute(),
+            'job_type_code' => $parts['job_type_code'],
+            'year_of_job' => $parts['full_year_of_job'],
+            'formatted' => $this->job_id
+        ];
+    }
+
+    // Method to get suggested job ID
+    public function getSuggestedJobId()
+    {
+        if (!$this->client_id || !$this->engagement_type) {
+            return null;
+        }
+
+        $jobService = app(\App\Services\JobGenerationService::class);
+
+        $jobYear = null;
+        if ($this->engagement_period_start) {
+            $jobYear = $this->engagement_period_start->year;
+        }
+
+        return $jobService->generateUniqueJobId(
+            $this->client_id,
+            $this->engagement_type,
+            $jobYear,
+            $this->id
+        );
+    }
+
+    // Method to regenerate job ID
+    public function regenerateJobId()
+    {
+        $this->job_id = $this->getSuggestedJobId();
+        return $this->save();
     }
 }

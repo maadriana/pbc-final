@@ -175,7 +175,204 @@
 
 </head>
 <body>
+@if(session('upload_config_warnings') && auth()->user()->isSystemAdmin())
+<div class="alert alert-warning alert-dismissible fade show position-fixed"
+     style="top: 20px; right: 20px; z-index: 9999; min-width: 400px; max-width: 500px;">
+    <div class="d-flex align-items-start">
+        <i class="fas fa-exclamation-triangle me-2 mt-1 text-warning"></i>
+        <div class="flex-grow-1">
+            <h6 class="alert-heading mb-2">
+                <i class="fas fa-server me-1"></i>
+                PHP Configuration Issues Detected
+            </h6>
+            <div class="mb-2">
+                <small class="text-muted">The following settings may cause issues with 300MB file uploads:</small>
+            </div>
+            <ul class="mb-2 small">
+                @foreach(session('upload_config_warnings') as $warning)
+                    <li>{{ $warning }}</li>
+                @endforeach
+            </ul>
+            <div class="border-top pt-2 mt-2">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Contact your system administrator to update these PHP settings.
+                    <a href="{{ route('admin.upload.test') }}" class="text-decoration-none ms-2" target="_blank">
+                        <i class="fas fa-external-link-alt"></i> View Test Results
+                    </a>
+                </small>
+            </div>
+        </div>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+@endif
 
+<!-- Upload Stats Dashboard Widget (Optional - for admin dashboard) -->
+@if(request()->routeIs('admin.dashboard') && auth()->user()->isSystemAdmin())
+<div id="uploadStatsWidget" class="position-fixed"
+     style="bottom: 20px; right: 20px; z-index: 1000; width: 300px; display: none;">
+    <div class="card border-info">
+        <div class="card-header bg-info text-white py-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="fw-bold">
+                    <i class="fas fa-upload me-1"></i>
+                    Upload System Status
+                </small>
+                <button type="button" class="btn-close btn-close-white btn-sm" onclick="hideUploadStats()"></button>
+            </div>
+        </div>
+        <div class="card-body p-3">
+            <div id="uploadStatsContent">
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <small class="d-block mt-2 text-muted">Loading upload statistics...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-load upload stats on admin dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.location.pathname.includes('/admin/dashboard')) {
+        setTimeout(loadUploadStats, 2000); // Load after 2 seconds
+    }
+});
+
+function loadUploadStats() {
+    fetch('/admin/upload/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayUploadStats(data);
+                document.getElementById('uploadStatsWidget').style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Failed to load upload stats:', error);
+        });
+}
+
+function displayUploadStats(data) {
+    const content = document.getElementById('uploadStatsContent');
+    const stats = data.upload_stats;
+    const server = data.server_stats;
+
+    content.innerHTML = `
+        <div class="row g-2 text-center">
+            <div class="col-6">
+                <div class="border rounded p-2">
+                    <div class="fw-bold text-primary">${stats.total_uploads}</div>
+                    <small class="text-muted">Total Files</small>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="border rounded p-2">
+                    <div class="fw-bold text-success">${stats.total_size_formatted}</div>
+                    <small class="text-muted">Total Size</small>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="border rounded p-2">
+                    <div class="fw-bold text-warning">${stats.large_files_count}</div>
+                    <small class="text-muted">Large Files</small>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="border rounded p-2">
+                    <div class="fw-bold text-info">${stats.recent_uploads}</div>
+                    <small class="text-muted">Recent</small>
+                </div>
+            </div>
+        </div>
+
+        ${server.disk_usage_percentage > 80 ? `
+        <div class="alert alert-warning py-2 mt-2 mb-0">
+            <small>
+                <i class="fas fa-exclamation-triangle me-1"></i>
+                Disk usage: ${server.disk_usage_percentage.toFixed(1)}%
+            </small>
+        </div>
+        ` : ''}
+
+        ${data.configuration_issues.length > 0 ? `
+        <div class="alert alert-danger py-2 mt-2 mb-0">
+            <small>
+                <i class="fas fa-exclamation-circle me-1"></i>
+                ${data.configuration_issues.length} config issue(s) detected
+            </small>
+        </div>
+        ` : ''}
+    `;
+}
+
+function hideUploadStats() {
+    document.getElementById('uploadStatsWidget').style.display = 'none';
+}
+</script>
+@endif
+
+<style>
+/* Enhanced alert styling */
+.alert.position-fixed {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border: none;
+    border-radius: 8px;
+}
+
+.alert-warning.position-fixed {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    border-left: 4px solid #f39c12;
+}
+
+/* Upload stats widget styling */
+#uploadStatsWidget .card {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+#uploadStatsWidget .border {
+    border-color: #e9ecef !important;
+}
+
+#uploadStatsWidget .text-primary { color: #007bff !important; }
+#uploadStatsWidget .text-success { color: #28a745 !important; }
+#uploadStatsWidget .text-warning { color: #ffc107 !important; }
+#uploadStatsWidget .text-info { color: #17a2b8 !important; }
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .alert.position-fixed {
+        right: 10px;
+        left: 10px;
+        min-width: auto;
+        max-width: none;
+    }
+
+    #uploadStatsWidget {
+        right: 10px;
+        bottom: 10px;
+        width: calc(100% - 20px);
+        max-width: 300px;
+    }
+}
+</style>
     {{-- Navbar --}}
     <nav class="navbar navbar-expand-lg shadow-sm">
         <div class="container-fluid px-4">
@@ -252,11 +449,6 @@
                 <li class="nav-item">
                     <a class="nav-link {{ request()->routeIs('admin.projects.*') ? 'active' : '' }}" href="{{ route('admin.projects.index') }}">
                         <i class="fas fa-briefcase me-2"></i>Projects
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('admin.pbc-templates.*') ? 'active' : '' }}" href="{{ route('admin.pbc-templates.index') }}">
-                        <i class="fas fa-copy me-2"></i>Templates
                     </a>
                 </li>
                 <li class="nav-item">
