@@ -62,7 +62,7 @@
                                 <i class="fas fa-lock"></i> Pre-selected from client details
                             </div>
                         @else
-                            <select name="client_id" class="form-select @error('client_id') is-invalid @enderror" required>
+                            <select name="client_id" class="form-select @error('client_id') is-invalid @enderror" required onchange="updateJobIdPreview()">
                                 <option value="">Select Company...</option>
                                 @foreach($clients as $client)
                                     <option value="{{ $client->id }}" {{ old('client_id') == $client->id ? 'selected' : '' }}>
@@ -80,11 +80,24 @@
                         </label>
                         <input type="text"
                                name="job_id"
+                               id="job_id_field"
                                class="form-control @error('job_id') is-invalid @enderror"
                                value="{{ old('job_id') }}"
-                               placeholder="e.g., 1-01-001"
+                               placeholder="Will be auto-generated"
                                readonly>
-                        <div class="form-text">Job ID will be auto-generated based on engagement type</div>
+                        <div class="form-text">
+                            <div id="job-id-format" class="text-muted">
+                                Format: <code>CLIENT-YR_ENGAGED-SERIES-TYPE-JOB_YR</code>
+                            </div>
+                            <div id="job-id-breakdown" class="text-info mt-1" style="display: none;">
+                                <small class="d-block"><strong>Breakdown:</strong></small>
+                                <small class="d-block">• <span id="client-part">CLIENT</span>: 3-letter client initial</small>
+                                <small class="d-block">• <span id="year-engaged-part">YR_ENGAGED</span>: Year client first engaged (2-digit)</small>
+                                <small class="d-block">• <span id="series-part">SERIES</span>: Sequential number (3-digit)</small>
+                                <small class="d-block">• <span id="type-part">TYPE</span>: Engagement type (A/AC/T/S/O)</small>
+                                <small class="d-block">• <span id="job-year-part">JOB_YR</span>: Year of engagement (2-digit)</small>
+                            </div>
+                        </div>
                         @error('job_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
@@ -106,26 +119,32 @@
                             Type of Engagement <span class="text-danger">*</span>
                         </label>
                         <select name="engagement_type"
+                                id="engagement_type_field"
                                 class="form-select @error('engagement_type') is-invalid @enderror"
                                 required
-                                onchange="updateJobId()">
+                                onchange="updateJobIdPreview()">
                             <option value="">Select Type...</option>
-                            <option value="audit" {{ old('engagement_type') == 'audit' ? 'selected' : '' }}>Audit</option>
-                            <option value="accounting" {{ old('engagement_type') == 'accounting' ? 'selected' : '' }}>Accounting</option>
-                            <option value="tax" {{ old('engagement_type') == 'tax' ? 'selected' : '' }}>Tax</option>
-                            <option value="special_engagement" {{ old('engagement_type') == 'special_engagement' ? 'selected' : '' }}>Special Engagement</option>
-                            <option value="others" {{ old('engagement_type') == 'others' ? 'selected' : '' }}>Others</option>
+                            <option value="audit" {{ old('engagement_type') == 'audit' ? 'selected' : '' }}>Audit (A)</option>
+                            <option value="accounting" {{ old('engagement_type') == 'accounting' ? 'selected' : '' }}>Accounting (AC)</option>
+                            <option value="tax" {{ old('engagement_type') == 'tax' ? 'selected' : '' }}>Tax (T)</option>
+                            <option value="special_engagement" {{ old('engagement_type') == 'special_engagement' ? 'selected' : '' }}>Special Engagement (S)</option>
+                            <option value="others" {{ old('engagement_type') == 'others' ? 'selected' : '' }}>Others (O)</option>
                         </select>
                         @error('engagement_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Engagement Period</label>
-                        <input type="text"
+                        <label class="form-label fw-bold">Engagement Period (Year)</label>
+                        <input type="number"
                                name="engagement_period"
+                               id="engagement_period_field"
                                class="form-control @error('engagement_period') is-invalid @enderror"
-                               value="{{ old('engagement_period', '2024') }}"
-                               placeholder="e.g., 2024">
+                               value="{{ old('engagement_period', date('Y')) }}"
+                               min="2020"
+                               max="2030"
+                               placeholder="e.g., 2024"
+                               onchange="updateJobIdPreview()">
+                        <div class="form-text">This will be used as the job year in the Job ID</div>
                         @error('engagement_period')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                 </div>
@@ -253,7 +272,7 @@
         </div>
     </div>
 
-    <!-- Preview Section -->
+    <!-- Enhanced Preview Section -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-primary text-white">
             <h6 class="mb-0">
@@ -276,7 +295,16 @@
                         </tr>
                         <tr>
                             <td class="fw-bold">Job ID:</td>
-                            <td id="preview-job-id"><em class="text-muted">Will be auto-generated</em></td>
+                            <td>
+                                <div id="preview-job-id">
+                                    <em class="text-muted">Will be auto-generated</em>
+                                </div>
+                                <div id="preview-job-breakdown" class="mt-1" style="display: none;">
+                                    <small class="text-info">
+                                        <span id="breakdown-client" class="fw-bold text-primary">ABC</span>-<span id="breakdown-year-engaged" class="fw-bold text-success">22</span>-<span id="breakdown-series" class="fw-bold text-warning">001</span>-<span id="breakdown-type" class="fw-bold text-info">A</span>-<span id="breakdown-job-year" class="fw-bold text-danger">24</span>
+                                    </small>
+                                </div>
+                            </td>
                         </tr>
                         <tr>
                             <td class="fw-bold">Engagement:</td>
@@ -331,6 +359,34 @@
 .form-control[readonly] {
     background-color: #f8f9fa;
     border-color: #e9ecef;
+}
+
+/* Job ID specific styling */
+#job_id_field {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+#job-id-breakdown {
+    background-color: #f8f9fa;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    border-left: 4px solid #0d6efd;
+}
+
+#job-id-breakdown small {
+    line-height: 1.4;
+}
+
+/* Preview breakdown styling */
+#preview-job-breakdown {
+    font-family: 'Courier New', monospace;
+    font-size: 1.1rem;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    border: 1px solid #dee2e6;
 }
 
 /* Card styling */
@@ -452,35 +508,7 @@
     animation: spin 1s linear infinite;
 }
 
-/* Responsive improvements */
-@media (max-width: 768px) {
-    .card-body {
-        padding: 1.5rem;
-    }
-
-    .btn {
-        padding: 0.5rem 1rem;
-    }
-
-    .table-borderless .fw-bold {
-        width: 100px;
-        font-size: 0.9rem;
-    }
-}
-
-/* Icon alignment */
-.fas {
-    width: 16px;
-    text-align: center;
-}
-
-/* Auto-fill animation */
-.auto-filled {
-    background-color: #e8f5e8 !important;
-    transition: background-color 0.3s ease;
-}
-
-/* Job ID generation indicator */
+/* Job ID generation animation */
 .job-id-generating {
     position: relative;
 }
@@ -504,48 +532,65 @@
     100% { transform: rotate(360deg); }
 }
 
-/* Preview section enhancements */
-#preview-section {
+/* Auto-fill animation */
+.auto-filled {
+    background-color: #e8f5e8 !important;
+    transition: background-color 0.3s ease;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1.5rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+    }
+
+    .table-borderless .fw-bold {
+        width: 100px;
+        font-size: 0.9rem;
+    }
+
+    #job-id-breakdown {
+        padding: 0.5rem;
+    }
+
+    #preview-job-breakdown {
+        font-size: 1rem;
+    }
+}
+
+/* Enhanced code styling */
+code {
     background-color: #f8f9fa;
-    border-left: 4px solid #0d6efd;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-family: 'Courier New', monospace;
+    color: #e83e8c;
 }
 
-.preview-value {
-    font-weight: 500;
-    color: #495057;
+/* Breakdown color coding */
+.breakdown-part {
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    margin: 0 0.125rem;
 }
 
-.preview-empty {
-    font-style: italic;
-    color: #6c757d;
-}
-
-/* Form section spacing */
-.row.g-4 {
-    --bs-gutter-x: 1.5rem;
-    --bs-gutter-y: 1.5rem;
-}
-
-/* Enhanced select styling */
-.form-select option {
-    padding: 0.5rem;
-}
-
-/* Success states */
-.form-control.is-valid, .form-select.is-valid {
-    border-color: #198754;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='m2.3 6.73.94-.94 1.06 1.06'/%3e%3c/svg%3e");
-}
-
-/* Focus improvements */
-.form-control:focus, .form-select:focus {
-    border-width: 2px;
-}
+.breakdown-client { background-color: rgba(13, 110, 253, 0.1); }
+.breakdown-year { background-color: rgba(25, 135, 84, 0.1); }
+.breakdown-series { background-color: rgba(255, 193, 7, 0.1); }
+.breakdown-type { background-color: rgba(13, 202, 240, 0.1); }
+.breakdown-job-year { background-color: rgba(220, 53, 69, 0.1); }
 </style>
 @endsection
 
 @section('scripts')
 <script>
+// Global variables for client data
+let clientsData = @json($clients ?? []);
+
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize form listeners
     initializeFormListeners();
@@ -553,8 +598,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update preview on page load
     updatePreview();
 
-    // Auto-generate job ID when engagement type changes
-    updateJobId();
+    // Show job ID breakdown initially
+    toggleJobIdBreakdown(true);
+
+    // Initialize job ID preview if client is preselected
+    @if($preselectedClient)
+        updateJobIdPreview();
+    @endif
 });
 
 // Initialize all form event listeners
@@ -564,7 +614,7 @@ function initializeFormListeners() {
     if (engagementNameField) {
         engagementNameField.addEventListener('input', function() {
             updatePreview();
-            // ADDED: Sync engagement name with hidden name field
+            // Sync engagement name with hidden name field
             const hiddenNameField = document.getElementById('hidden-name');
             if (hiddenNameField) {
                 hiddenNameField.value = this.value;
@@ -572,46 +622,40 @@ function initializeFormListeners() {
         });
     }
 
-    // Engagement type preview
+    // Engagement type preview and Job ID update
     const engagementTypeField = document.querySelector('select[name="engagement_type"]');
     if (engagementTypeField) {
         engagementTypeField.addEventListener('change', function() {
             updatePreview();
-            updateJobId();
+            updateJobIdPreview();
         });
     }
 
-    // Engagement period preview
+    // Engagement period preview and Job ID update
     const engagementPeriodField = document.querySelector('input[name="engagement_period"]');
     if (engagementPeriodField) {
-        engagementPeriodField.addEventListener('input', updatePreview);
+        engagementPeriodField.addEventListener('input', function() {
+            updatePreview();
+            updateJobIdPreview();
+        });
     }
 
     // Team assignment previews
-    const partnerField = document.querySelector('select[name="engagement_partner_id"]');
-    if (partnerField) {
-        partnerField.addEventListener('change', updatePreview);
-    }
-
-    const managerField = document.querySelector('select[name="manager_id"]');
-    if (managerField) {
-        managerField.addEventListener('change', updatePreview);
-    }
-
-    const associate1Field = document.querySelector('select[name="associate_1"]');
-    if (associate1Field) {
-        associate1Field.addEventListener('change', updatePreview);
-    }
-
-    const associate2Field = document.querySelector('select[name="associate_2"]');
-    if (associate2Field) {
-        associate2Field.addEventListener('change', updatePreview);
-    }
+    const teamFields = ['engagement_partner_id', 'manager_id', 'associate_1', 'associate_2'];
+    teamFields.forEach(fieldName => {
+        const field = document.querySelector(`select[name="${fieldName}"]`);
+        if (field) {
+            field.addEventListener('change', updatePreview);
+        }
+    });
 
     // Client selection (if not pre-selected)
     const clientField = document.querySelector('select[name="client_id"]');
     if (clientField) {
-        clientField.addEventListener('change', updatePreview);
+        clientField.addEventListener('change', function() {
+            updatePreview();
+            updateJobIdPreview();
+        });
     }
 
     // Form validation on input
@@ -621,58 +665,193 @@ function initializeFormListeners() {
     });
 }
 
-// Update job ID based on engagement type
-function updateJobId() {
-    const engagementTypeField = document.querySelector('select[name="engagement_type"]');
-    const jobIdField = document.querySelector('input[name="job_id"]');
+// Enhanced Job ID preview function with new format
+function updateJobIdPreview() {
+    const clientSelect = document.querySelector('select[name="client_id"]');
+    const engagementTypeSelect = document.getElementById('engagement_type_field');
+    const engagementPeriodInput = document.getElementById('engagement_period_field');
+    const jobIdField = document.getElementById('job_id_field');
+    const previewJobId = document.getElementById('preview-job-id');
+    const previewBreakdown = document.getElementById('preview-job-breakdown');
 
-    if (!engagementTypeField || !jobIdField) return;
+    // Get selected values
+    const clientId = clientSelect ? clientSelect.value : @json($preselectedClient->id ?? null);
+    const engagementType = engagementTypeSelect ? engagementTypeSelect.value : '';
+    const engagementPeriod = engagementPeriodInput ? engagementPeriodInput.value : new Date().getFullYear();
 
-    const engagementType = engagementTypeField.value;
-
-    if (!engagementType) {
+    if (!clientId || !engagementType) {
         jobIdField.value = '';
-        const previewJobId = document.getElementById('preview-job-id');
-        if (previewJobId) {
-            previewJobId.innerHTML = '<em class="text-muted">Select engagement type first</em>';
-        }
+        previewJobId.innerHTML = '<em class="text-muted">Select client and engagement type</em>';
+        previewBreakdown.style.display = 'none';
+        updateJobIdBreakdownDetails('', '', '', '', '');
         return;
     }
 
-    // Show loading state
+    // Get client data
+    let selectedClient = null;
+    @if($preselectedClient)
+        selectedClient = @json($preselectedClient);
+    @else
+        selectedClient = clientsData.find(client => client.id == clientId);
+    @endif
+
+    if (!selectedClient) {
+        jobIdField.value = '';
+        previewJobId.innerHTML = '<em class="text-muted">Client not found</em>';
+        previewBreakdown.style.display = 'none';
+        return;
+    }
+
+    // Show generating state
     jobIdField.classList.add('job-id-generating');
+    previewJobId.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
 
-    // Simulate job ID generation (in real app, this would be an API call)
+    // Generate job ID components
     setTimeout(() => {
-        const typeMap = {
-            'audit': '1',
-            'accounting': '2',
-            'tax': '3',
-            'special_engagement': '4',
-            'others': '5'
-        };
+        const clientInitial = getClientInitial(selectedClient.company_name);
+        const yearEngaged = getYearEngaged(selectedClient);
+        const series = '001'; // Will be calculated on backend
+        const typeCode = getEngagementTypeCode(engagementType);
+        const jobYear = String(engagementPeriod).slice(-2).padStart(2, '0');
 
-        const typeCode = typeMap[engagementType] || '9';
-        const year = new Date().getFullYear().toString().slice(-2);
-        const sequence = Math.floor(Math.random() * 999) + 1; // In real app, get from database
+        const jobId = `${clientInitial}-${yearEngaged}-${series}-${typeCode}-${jobYear}`;
 
-        const jobId = `${typeCode}-${year}-${sequence.toString().padStart(3, '0')}`;
-
+        // Update fields
         jobIdField.value = jobId;
         jobIdField.classList.remove('job-id-generating');
         jobIdField.classList.add('auto-filled');
 
         // Update preview
-        const previewJobId = document.getElementById('preview-job-id');
-        if (previewJobId) {
-            previewJobId.innerHTML = `<span class="preview-value">${jobId}</span>`;
-        }
+        previewJobId.innerHTML = `<span class="preview-value fw-bold">${jobId}</span>`;
+        previewBreakdown.style.display = 'block';
+
+        // Update breakdown components
+        updateJobIdBreakdownDetails(clientInitial, yearEngaged, series, typeCode, jobYear);
+
+        // Update breakdown explanation
+        updateJobIdBreakdownExplanation(clientInitial, yearEngaged, typeCode, selectedClient, engagementType);
 
         // Remove auto-filled class after animation
         setTimeout(() => {
             jobIdField.classList.remove('auto-filled');
         }, 2000);
-    }, 1000);
+    }, 800);
+}
+
+// Get 3-letter client initial
+function getClientInitial(companyName) {
+    if (!companyName) return 'ABC';
+
+    // Remove common business terms and get meaningful letters
+    const cleanName = companyName
+        .replace(/\b(Corporation|Corp|Company|Co|Inc|Incorporated|Ltd|Limited|LLC|LLP)\b/gi, '')
+        .replace(/[^a-zA-Z\s]/g, '')
+        .trim();
+
+    const words = cleanName.split(/\s+/).filter(word => word.length > 0);
+
+    if (words.length === 0) {
+        return companyName.substring(0, 3).toUpperCase().padEnd(3, 'X');
+    } else if (words.length === 1) {
+        return words[0].substring(0, 3).toUpperCase().padEnd(3, 'X');
+    } else if (words.length === 2) {
+        return (words[0].charAt(0) + words[1].substring(0, 2)).toUpperCase().padEnd(3, 'X');
+    } else {
+        return (words[0].charAt(0) + words[1].charAt(0) + words[2].charAt(0)).toUpperCase();
+    }
+}
+
+// Get year engaged (2-digit)
+function getYearEngaged(client) {
+    // Use year_engaged if available, otherwise use creation year
+    const year = client.year_engaged || new Date(client.created_at).getFullYear() || new Date().getFullYear();
+    return String(year).slice(-2).padStart(2, '0');
+}
+
+// Get engagement type code
+function getEngagementTypeCode(engagementType) {
+    const codes = {
+        'audit': 'A',
+        'accounting': 'AC',
+        'tax': 'T',
+        'special_engagement': 'S',
+        'others': 'O'
+    };
+    return codes[engagementType] || 'A';
+}
+
+// Update breakdown visual components
+function updateJobIdBreakdownDetails(clientInitial, yearEngaged, series, typeCode, jobYear) {
+    const elements = {
+        'breakdown-client': clientInitial,
+        'breakdown-year-engaged': yearEngaged,
+        'breakdown-series': series,
+        'breakdown-type': typeCode,
+        'breakdown-job-year': jobYear
+    };
+
+    Object.entries(elements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+    });
+
+    // Also update the breakdown explanation parts
+    const explanationElements = {
+        'client-part': clientInitial,
+        'year-engaged-part': yearEngaged,
+        'series-part': series,
+        'type-part': typeCode,
+        'job-year-part': jobYear
+    };
+
+    Object.entries(explanationElements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+    });
+}
+
+// Update detailed breakdown explanation
+function updateJobIdBreakdownExplanation(clientInitial, yearEngaged, typeCode, client, engagementType) {
+    const fullYearEngaged = 2000 + parseInt(yearEngaged);
+    const engagementTypeDisplay = getEngagementTypeDisplay(engagementType);
+
+    const explanations = [
+        `${clientInitial}: ${client.company_name} initial`,
+        `${yearEngaged}: Client engaged since ${fullYearEngaged}`,
+        `001: First ${engagementTypeDisplay.toLowerCase()} engagement`,
+        `${typeCode}: ${engagementTypeDisplay} engagement`,
+        `${document.getElementById('engagement_period_field')?.value || new Date().getFullYear().toString().slice(-2)}: Year ${document.getElementById('engagement_period_field')?.value || new Date().getFullYear()}`
+    ];
+
+    // Update tooltip or additional info if needed
+    const jobIdField = document.getElementById('job_id_field');
+    if (jobIdField) {
+        jobIdField.title = explanations.join(' | ');
+    }
+}
+
+// Get engagement type display name
+function getEngagementTypeDisplay(engagementType) {
+    const displays = {
+        'audit': 'Audit',
+        'accounting': 'Accounting',
+        'tax': 'Tax',
+        'special_engagement': 'Special Engagement',
+        'others': 'Others'
+    };
+    return displays[engagementType] || 'Audit';
+}
+
+// Toggle job ID breakdown visibility
+function toggleJobIdBreakdown(show = null) {
+    const breakdown = document.getElementById('job-id-breakdown');
+    if (!breakdown) return;
+
+    if (show === null) {
+        breakdown.style.display = breakdown.style.display === 'none' ? 'block' : 'none';
+    } else {
+        breakdown.style.display = show ? 'block' : 'none';
+    }
 }
 
 // Update the preview section
@@ -753,7 +932,7 @@ function validateField(e) {
     }
 }
 
-// FIXED: Save project function
+// Save project function
 function saveProject() {
     const form = document.getElementById('project-form');
     if (!form) {
@@ -780,7 +959,7 @@ function saveProject() {
     }, 500);
 }
 
-// FIXED: Validate entire form
+// Validate entire form
 function validateForm() {
     const requiredFields = document.querySelectorAll('input[required], select[required]');
     let isValid = true;
@@ -846,69 +1025,7 @@ function showAlert(message, type) {
     }, 5000);
 }
 
-// Auto-save draft functionality (optional)
-function saveDraft() {
-    const formData = new FormData(document.getElementById('project-form'));
-    const draftData = {};
-
-    for (let [key, value] of formData.entries()) {
-        draftData[key] = value;
-    }
-
-    try {
-        localStorage.setItem('project_form_draft', JSON.stringify(draftData));
-    } catch (e) {
-        console.warn('Could not save draft to localStorage:', e);
-    }
-}
-
-// Load draft on page load (optional)
-function loadDraft() {
-    try {
-        const draftData = localStorage.getItem('project_form_draft');
-
-        if (draftData) {
-            const data = JSON.parse(draftData);
-
-            Object.keys(data).forEach(key => {
-                const field = document.querySelector(`[name="${key}"]`);
-                if (field && field.type !== 'hidden' && !field.value) {
-                    field.value = data[key];
-
-                    // Trigger change event for selects
-                    if (field.tagName === 'SELECT') {
-                        field.dispatchEvent(new Event('change'));
-                    }
-                }
-            });
-
-            showAlert('Draft loaded successfully', 'info');
-            updatePreview();
-        }
-    } catch (e) {
-        console.warn('Error loading draft:', e);
-    }
-}
-
-// Save draft on form changes (optional)
-const form = document.getElementById('project-form');
-if (form) {
-    form.addEventListener('input', function() {
-        clearTimeout(window.draftTimeout);
-        window.draftTimeout = setTimeout(saveDraft, 2000);
-    });
-
-    // Clear draft on successful submission
-    form.addEventListener('submit', function() {
-        try {
-            localStorage.removeItem('project_form_draft');
-        } catch (e) {
-            console.warn('Could not clear draft:', e);
-        }
-    });
-}
-
-// Form auto-completion
+// Auto-completion based on engagement type and period
 function autoCompleteEngagement() {
     const engagementTypeField = document.querySelector('select[name="engagement_type"]');
     const periodField = document.querySelector('input[name="engagement_period"]');
@@ -936,12 +1053,18 @@ function autoCompleteEngagement() {
                 suggestion = `Special engagement for ${period}`;
                 break;
             default:
-                suggestion = `${engagementType} engagement for ${period}`;
+                suggestion = `${getEngagementTypeDisplay(engagementType)} engagement for ${period}`;
         }
 
         engagementNameField.value = suggestion;
         engagementNameField.classList.add('auto-filled');
         updatePreview();
+
+        // Update hidden name field
+        const hiddenNameField = document.getElementById('hidden-name');
+        if (hiddenNameField) {
+            hiddenNameField.value = suggestion;
+        }
 
         setTimeout(() => {
             engagementNameField.classList.remove('auto-filled');
@@ -960,6 +1083,34 @@ if (engagementTypeField) {
 if (periodField) {
     periodField.addEventListener('input', autoCompleteEngagement);
 }
+
+// Enhanced Job ID tooltip
+function addJobIdTooltip() {
+    const jobIdField = document.getElementById('job_id_field');
+    if (jobIdField) {
+        jobIdField.addEventListener('mouseenter', function() {
+            if (this.value) {
+                const parts = this.value.split('-');
+                if (parts.length === 5) {
+                    const tooltip = `
+                        Client: ${parts[0]} |
+                        Engaged: 20${parts[1]} |
+                        Series: ${parts[2]} |
+                        Type: ${parts[3]} |
+                        Year: 20${parts[4]}
+                    `;
+                    this.setAttribute('data-bs-toggle', 'tooltip');
+                    this.setAttribute('title', tooltip);
+                }
+            }
+        });
+    }
+}
+
+// Initialize tooltip
+document.addEventListener('DOMContentLoaded', function() {
+    addJobIdTooltip();
+});
 
 // Handle form submission errors (if redirected back with errors)
 window.addEventListener('load', function() {
@@ -982,6 +1133,11 @@ function resetForm() {
 
         // Reset preview
         updatePreview();
+
+        // Reset job ID
+        document.getElementById('job_id_field').value = '';
+        document.getElementById('preview-job-id').innerHTML = '<em class="text-muted">Will be auto-generated</em>';
+        document.getElementById('preview-job-breakdown').style.display = 'none';
 
         showAlert('Form reset successfully', 'info');
     }
@@ -1031,5 +1187,40 @@ setTimeout(() => {
         firstRequiredField.focus();
     }
 }, 100);
+
+// Debug function for job ID generation
+function debugJobIdGeneration() {
+    const clientSelect = document.querySelector('select[name="client_id"]');
+    const engagementType = document.getElementById('engagement_type_field').value;
+    const engagementPeriod = document.getElementById('engagement_period_field').value;
+
+    console.log('=== JOB ID DEBUG ===');
+    console.log('Client ID:', clientSelect ? clientSelect.value : 'Preselected');
+    console.log('Engagement Type:', engagementType);
+    console.log('Engagement Period:', engagementPeriod);
+
+    if (clientSelect && clientSelect.value) {
+        const selectedClient = clientsData.find(c => c.id == clientSelect.value);
+        console.log('Selected Client:', selectedClient);
+        console.log('Client Initial:', getClientInitial(selectedClient.company_name));
+        console.log('Year Engaged:', getYearEngaged(selectedClient));
+        console.log('Type Code:', getEngagementTypeCode(engagementType));
+        console.log('Job Year:', String(engagementPeriod).slice(-2).padStart(2, '0'));
+    }
+    console.log('=== END DEBUG ===');
+}
+
+// Add debug button in development mode
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    document.addEventListener('DOMContentLoaded', function() {
+        const debugBtn = document.createElement('button');
+        debugBtn.type = 'button';
+        debugBtn.className = 'btn btn-outline-info btn-sm position-fixed';
+        debugBtn.style.cssText = 'bottom: 20px; left: 20px; z-index: 9999;';
+        debugBtn.innerHTML = 'Debug Job ID';
+        debugBtn.onclick = debugJobIdGeneration;
+        document.body.appendChild(debugBtn);
+    });
+}
 </script>
 @endsection

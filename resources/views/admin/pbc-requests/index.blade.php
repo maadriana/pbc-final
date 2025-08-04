@@ -6,7 +6,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="mb-1">PBC Request List</h1>
-        <p class="text-muted mb-0">Rule: Pending for uploading</p>
+        <p class="text-muted mb-0">Rule: Pending for uploading and review only</p>
     </div>
 </div>
 
@@ -23,14 +23,14 @@
                            value="{{ request('search') }}">
                 </div>
 
-                <!-- All Status Filter -->
+                <!-- Status Filter - Updated to exclude completed/approved -->
                 <div class="col-md-2">
-                    <label class="form-label small text-muted fw-bold">All Status</label>
+                    <label class="form-label small text-muted fw-bold">Status</label>
                     <select name="status" class="form-select">
-                        <option value="">All Status</option>
+                        <option value="">All Active</option>
                         <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pending</option>
                         <option value="in_progress" {{ request('status') == 'in_progress' ? 'selected' : '' }}>Uploaded</option>
-                        <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>Completed</option>
+                        <option value="rejected" {{ request('status') == 'rejected' ? 'selected' : '' }}>Rejected</option>
                         <option value="overdue" {{ request('status') == 'overdue' ? 'selected' : '' }}>Overdue</option>
                     </select>
                 </div>
@@ -93,11 +93,15 @@
                             $isOverdue = $request->due_date && $request->due_date->isPast() && $currentStatus !== 'approved';
                             $displayStatus = $isOverdue ? 'overdue' : $currentStatus;
 
+                            // FILTER OUT APPROVED ITEMS - Skip this iteration if approved
+                            if ($currentStatus === 'approved') {
+                                continue;
+                            }
+
                             // Get status colors
                             $statusColors = [
                                 'pending' => 'secondary',
                                 'uploaded' => 'warning',
-                                'approved' => 'success',
                                 'rejected' => 'danger',
                                 'overdue' => 'danger'
                             ];
@@ -219,23 +223,13 @@
                                             Approve
                                         </button>
 
-                                        <!-- FIXED: Reject Button - Remove requestId parameter -->
+                                        <!-- Reject Button -->
                                         <button type="button"
                                                 class="btn btn-sm btn-danger"
                                                 onclick="openRejectModal({{ $item->id }})"
                                                 title="Reject with Note">
                                             Reject
                                         </button>
-                                    @elseif($currentStatus === 'approved')
-                                        <!-- View/Download Button -->
-                                        @if($item->documents->where('status', 'approved')->first())
-                                            <button type="button"
-                                                    class="btn btn-sm btn-success"
-                                                    onclick="viewDocument({{ $item->documents->where('status', 'approved')->first()->id }})"
-                                                    title="View Document">
-                                                View/Download
-                                            </button>
-                                        @endif
                                     @elseif($currentStatus === 'rejected')
                                         <!-- Upload Button - Allow re-upload -->
                                         <button type="button"
@@ -272,22 +266,17 @@
                                 </div>
                             </td>
 
-                            <!-- FIXED: Updated Note column to properly display rejection reasons -->
+                            <!-- Note column -->
                             <td class="py-3">
                                 <div class="text-truncate" style="max-width: 150px;">
                                     @php
                                         // Get the latest rejected document's admin notes
                                         $rejectedDoc = $item->documents->where('status', 'rejected')->first();
-                                        $approvedDoc = $item->documents->where('status', 'approved')->first();
                                     @endphp
 
                                     @if($currentStatus === 'rejected' && $rejectedDoc && $rejectedDoc->admin_notes)
                                         <span class="text-danger" title="{{ $rejectedDoc->admin_notes }}">
                                             {{ Str::limit($rejectedDoc->admin_notes, 30) }}
-                                        </span>
-                                    @elseif($currentStatus === 'approved' && $approvedDoc && $approvedDoc->admin_notes)
-                                        <span class="text-success" title="{{ $approvedDoc->admin_notes }}">
-                                            {{ Str::limit($approvedDoc->admin_notes, 30) }}
                                         </span>
                                     @elseif($item->remarks)
                                         <span title="{{ $item->remarks }}">{{ Str::limit($item->remarks, 30) }}</span>
@@ -303,14 +292,17 @@
                         <td colspan="10" class="text-center py-5">
                             <div class="text-muted">
                                 <i class="fas fa-inbox fa-3x mb-3"></i>
-                                <h5>No PBC Requests Found</h5>
-                                <p>No requests match your current filters.</p>
+                                <h5>No Active PBC Requests Found</h5>
+                                <p>No pending, uploaded, rejected, or overdue requests match your current filters.</p>
                                 <div class="mt-3">
                                     <a href="{{ route('admin.pbc-requests.create') }}" class="btn btn-primary me-2">
                                         <i class="fas fa-plus"></i> Create Request
                                     </a>
-                                    <a href="{{ route('admin.pbc-requests.import') }}" class="btn btn-success">
+                                    <a href="{{ route('admin.pbc-requests.import') }}" class="btn btn-success me-2">
                                         <i class="fas fa-upload"></i> Import Requests
+                                    </a>
+                                    <a href="{{ route('admin.document-archive.index') }}" class="btn btn-info">
+                                        <i class="fas fa-archive"></i> View Archive
                                     </a>
                                 </div>
                             </div>
@@ -454,7 +446,6 @@
                 <form id="rejectForm">
                     @csrf
                     <input type="hidden" id="rejectItemId" name="item_id">
-                    <!-- REMOVED: rejectRequestId hidden input since global route doesn't need it -->
                     <div class="mb-3">
                         <label class="form-label">Reason for Rejection *</label>
                         <textarea class="form-control" name="reason" rows="4" required

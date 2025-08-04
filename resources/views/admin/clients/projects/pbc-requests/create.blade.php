@@ -5,13 +5,34 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="mb-1">Document Request List</h1>
-        <p class="text-muted mb-0">
-            Company: {{ $client->company_name }} |
-            Job ID: {{ $project->job_id ?? '1-01-001' }} |
-            Engagement Name: {{ $project->engagement_name ?? 'Statutory audit for YE122024' }} |
-            Type of Engagement: {{ ucfirst($project->engagement_type ?? 'Audit') }} |
-            Engagement Period: {{ $project->engagement_period_start?->format('m/d/Y') ?? '31/12/2024' }}
-        </p>
+        <div class="text-muted mb-0">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span><strong>Company:</strong> {{ $client->company_name }}</span>
+                <span class="text-muted">|</span>
+                <span>
+                    <strong>Job ID:</strong>
+                    @if($project->job_id)
+                        @php $jobIdBreakdown = $project->getJobIdBreakdownAttribute(); @endphp
+                        <span class="job-id-display fw-bold text-primary" title="Click to copy">{{ $project->job_id }}</span>
+                        @if($jobIdBreakdown)
+                            <small class="text-muted d-block d-md-inline ms-md-2">
+                                ({{ $jobIdBreakdown['client_initial'] }}: {{ $client->company_name }} |
+                                {{ $jobIdBreakdown['job_type_code'] }}: {{ ucfirst($project->engagement_type) }} |
+                                FY{{ $jobIdBreakdown['year_of_job'] }})
+                            </small>
+                        @endif
+                    @else
+                        <span class="text-danger">{{ $project->job_id ?? '1-01-001' }}</span>
+                    @endif
+                </span>
+                <span class="text-muted">|</span>
+                <span><strong>Engagement Name:</strong> {{ $project->engagement_name ?? 'Statutory audit for YE122024' }}</span>
+                <span class="text-muted">|</span>
+                <span><strong>Type of Engagement:</strong> {{ ucfirst($project->engagement_type ?? 'Audit') }}</span>
+                <span class="text-muted">|</span>
+                <span><strong>Engagement Period:</strong> {{ $project->engagement_period_start?->format('m/d/Y') ?? '31/12/2024' }}</span>
+            </div>
+        </div>
     </div>
     <div class="d-flex gap-2">
         <button type="button" class="btn btn-primary" id="save-btn" onclick="saveRequest()">
@@ -22,6 +43,63 @@
         </a>
     </div>
 </div>
+
+<!-- Enhanced Project Info Card -->
+@if($project->job_id && $project->getJobIdBreakdownAttribute())
+    @php $breakdown = $project->getJobIdBreakdownAttribute(); @endphp
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <h6 class="text-muted mb-3">Project Overview</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-building text-primary me-2"></i>
+                                <strong>Client:</strong>
+                                <span class="ms-2">{{ $client->company_name }}</span>
+                                <span class="badge bg-light text-dark ms-2">{{ $breakdown['client_initial'] }}</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-briefcase text-info me-2"></i>
+                                <strong>Engagement:</strong>
+                                <span class="ms-2">{{ $breakdown['job_type'] }} ({{ $breakdown['job_type_code'] }})</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-calendar-check text-danger me-2"></i>
+                                <strong>Financial Year:</strong>
+                                <span class="ms-2">{{ $breakdown['year_of_job'] }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-calendar text-success me-2"></i>
+                                <strong>Client Since:</strong>
+                                <span class="ms-2">{{ $breakdown['year_engaged'] }}</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-hashtag text-warning me-2"></i>
+                                <strong>Series:</strong>
+                                <span class="ms-2">#{{ $breakdown['series'] }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-center">
+                        <div class="job-id-visual p-3 bg-light rounded">
+                            <h6 class="text-muted mb-2">Job ID: {{ $project->job_id }}</h6>
+                            <div class="job-id-parts">
+                                <span class="job-part client-part" title="Client: {{ $client->company_name }}">{{ $breakdown['client_initial'] }}</span>-<span class="job-part year-part" title="Year Engaged: {{ $breakdown['year_engaged'] }}">{{ substr($breakdown['year_engaged'], -2) }}</span>-<span class="job-part series-part" title="Series: {{ $breakdown['series'] }}">{{ $breakdown['series'] }}</span>-<span class="job-part type-part" title="Type: {{ $breakdown['job_type'] }}">{{ $breakdown['job_type_code'] }}</span>-<span class="job-part job-year-part" title="Job Year: {{ $breakdown['year_of_job'] }}">{{ substr($breakdown['year_of_job'], -2) }}</span>
+                            </div>
+                            <small class="text-muted d-block mt-2">Click parts for details</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
 
 <!-- Success/Error Messages -->
 @if(session('success'))
@@ -53,7 +131,7 @@
 <form id="pbc-request-form" method="POST" action="{{ route('admin.clients.projects.pbc-requests.store', [$client, $project]) }}">
     @csrf
 
-    <!-- Main Request Details -->
+    <!-- Main Request Details Card -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
             <div class="row g-4">
@@ -62,11 +140,35 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Company</label>
                         <input type="text" class="form-control" value="{{ $client->company_name }}" readonly>
+                        @if($project->job_id && $project->getJobIdBreakdownAttribute())
+                            @php $breakdown = $project->getJobIdBreakdownAttribute(); @endphp
+                            <div class="form-text">
+                                <span class="badge bg-light text-dark">{{ $breakdown['client_initial'] }}</span>
+                                <small class="text-muted ms-2">Client code in Job ID</small>
+                            </div>
+                        @endif
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Job ID</label>
-                        <input type="text" class="form-control" value="{{ $project->job_id ?? '1-01-001' }}" readonly>
+                        <div class="input-group">
+                            <input type="text" class="form-control job-id-input" value="{{ $project->job_id ?? '1-01-001' }}" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyJobId()" title="Copy Job ID">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        @if($project->job_id && $project->getJobIdBreakdownAttribute())
+                            @php $breakdown = $project->getJobIdBreakdownAttribute(); @endphp
+                            <div class="form-text">
+                                <small class="text-info">
+                                    Format: <span class="fw-bold">{{ $breakdown['client_initial'] }}</span> (Client) -
+                                    <span class="fw-bold">{{ substr($breakdown['year_engaged'], -2) }}</span> (Engaged) -
+                                    <span class="fw-bold">{{ $breakdown['series'] }}</span> (Series) -
+                                    <span class="fw-bold">{{ $breakdown['job_type_code'] }}</span> (Type) -
+                                    <span class="fw-bold">{{ substr($breakdown['year_of_job'], -2) }}</span> (Year)
+                                </small>
+                            </div>
+                        @endif
                     </div>
 
                     <div class="mb-3">
@@ -76,12 +178,27 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Type of Engagement</label>
-                        <input type="text" class="form-control" value="{{ ucfirst($project->engagement_type ?? 'audit') }}" readonly>
+                        <div class="input-group">
+                            <input type="text" class="form-control" value="{{ ucfirst($project->engagement_type ?? 'audit') }}" readonly>
+                            @if($project->job_id && $project->getJobIdBreakdownAttribute())
+                                @php $breakdown = $project->getJobIdBreakdownAttribute(); @endphp
+                                <span class="input-group-text">
+                                    <span class="badge bg-info">{{ $breakdown['job_type_code'] }}</span>
+                                </span>
+                            @endif
+                        </div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Engagement Period</label>
                         <input type="text" class="form-control" value="{{ $project->engagement_period_start?->format('m/d/Y') ?? '31/12/2024' }}" readonly>
+                        @if($project->job_id && $project->getJobIdBreakdownAttribute())
+                            @php $breakdown = $project->getJobIdBreakdownAttribute(); @endphp
+                            <div class="form-text">
+                                <span class="badge bg-danger">FY {{ $breakdown['year_of_job'] }}</span>
+                                <small class="text-muted ms-2">Financial Year in Job ID</small>
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -176,6 +293,70 @@
 
 @section('styles')
 <style>
+/* Job ID specific styling */
+.job-id-input {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: #0d6efd;
+}
+
+.job-id-display {
+    font-family: 'Courier New', monospace;
+    font-size: 1.1rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    transition: all 0.2s ease;
+}
+
+/* Job ID Visual Breakdown */
+.job-id-visual {
+    border: 2px dashed #dee2e6;
+    transition: all 0.3s ease;
+}
+
+.job-id-parts {
+    font-family: 'Courier New', monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.job-part {
+    padding: 0.25rem 0.4rem;
+    border-radius: 0.25rem;
+    margin: 0 0.1rem;
+    transition: all 0.2s ease;
+    cursor: help;
+}
+
+.client-part {
+    background-color: rgba(13, 110, 253, 0.15);
+    color: #0d6efd;
+}
+
+.year-part {
+    background-color: rgba(25, 135, 84, 0.15);
+    color: #198754;
+}
+
+.series-part {
+    background-color: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+}
+
+.type-part {
+    background-color: rgba(13, 202, 240, 0.15);
+    color: #0dcaf0;
+}
+
+.job-year-part {
+    background-color: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+}
+
 /* Card enhancements */
 .card {
     border-radius: 0.5rem;
@@ -240,20 +421,12 @@
     border-radius: 0.375rem;
 }
 
-/* Stats styling */
-.border-end {
-    border-right: 1px solid #dee2e6 !important;
-}
-
-/* Authority table */
-.text-success {
-    color: #198754 !important;
-    font-weight: 500;
-}
-
-.text-muted {
-    color: #6c757d !important;
-}
+/* Project info icons */
+.fas.text-primary { color: #0d6efd !important; }
+.fas.text-success { color: #198754 !important; }
+.fas.text-info { color: #0dcaf0 !important; }
+.fas.text-warning { color: #ffc107 !important; }
+.fas.text-danger { color: #dc3545 !important; }
 
 /* Alert styling */
 .alert {
@@ -278,6 +451,17 @@
     pointer-events: none;
 }
 
+/* Copy button animation */
+.btn-copy-success {
+    animation: copy-success 0.5s ease-in-out;
+}
+
+@keyframes copy-success {
+    0% { background-color: transparent; }
+    50% { background-color: rgba(25, 135, 84, 0.2); }
+    100% { background-color: transparent; }
+}
+
 /* Responsive improvements */
 @media (max-width: 768px) {
     .table-responsive {
@@ -289,11 +473,39 @@
         font-size: 0.75rem;
     }
 
-    .border-end {
-        border-right: none !important;
-        border-bottom: 1px solid #dee2e6 !important;
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
+    .job-id-display {
+        font-size: 1rem;
+        letter-spacing: 0.5px;
+    }
+
+    .job-id-parts {
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+    }
+
+    .job-part {
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.05rem;
+    }
+
+    .job-id-visual {
+        padding: 1rem !important;
+    }
+
+    /* Stack project info vertically on mobile */
+    .d-flex.flex-wrap.align-items-center.gap-2 {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.5rem !important;
+    }
+
+    .d-flex.flex-wrap.align-items-center.gap-2 > span {
+        display: block;
+        width: 100%;
+    }
+
+    .text-muted {
+        display: none !important;
     }
 }
 
@@ -367,6 +579,21 @@
     animation: spin 1s linear infinite;
     color: white;
 }
+
+/* Input group enhancements */
+.input-group .btn {
+    border-color: #ced4da;
+}
+
+/* Form text enhancements */
+.form-text {
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+.form-text .badge {
+    font-size: 0.7rem;
+}
 </style>
 @endsection
 
@@ -376,10 +603,76 @@ let itemIndex = 1;
 
 document.addEventListener('DOMContentLoaded', function() {
     updateSummary();
+    initializeJobIdCopy();
     console.log('Page loaded successfully');
     console.log('Form action:', document.getElementById('pbc-request-form').action);
     console.log('CSRF token:', document.querySelector('input[name="_token"]').value);
 });
+
+// Initialize Job ID copy functionality
+function initializeJobIdCopy() {
+    // Main job ID display
+    const jobIdDisplay = document.querySelector('.job-id-display');
+    if (jobIdDisplay) {
+        jobIdDisplay.addEventListener('click', function() {
+            const jobId = this.textContent.trim();
+            copyToClipboard(jobId);
+        });
+    }
+
+    // Add click functionality to job parts for detailed info
+    const jobParts = document.querySelectorAll('.job-part');
+    jobParts.forEach(part => {
+        part.addEventListener('click', function() {
+            const partValue = this.textContent.trim();
+            const partTitle = this.getAttribute('title');
+            showAlert(`${partTitle}: ${partValue}`, 'info');
+        });
+    });
+}
+
+// Copy Job ID function
+function copyJobId() {
+    const jobIdInput = document.querySelector('.job-id-input');
+    const copyBtn = event.target.closest('button');
+
+    if (jobIdInput) {
+        const jobId = jobIdInput.value;
+        copyToClipboard(jobId);
+
+        // Visual feedback
+        copyBtn.classList.add('btn-copy-success');
+        setTimeout(() => {
+            copyBtn.classList.remove('btn-copy-success');
+        }, 500);
+    }
+}
+
+// Copy to clipboard function
+function copyToClipboard(text) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            showAlert(`Job ID "${text}" copied to clipboard!`, 'success');
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+            showAlert('Failed to copy Job ID to clipboard', 'warning');
+        });
+    } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showAlert(`Job ID "${text}" copied to clipboard!`, 'success');
+        } catch (err) {
+            console.error('Fallback copy failed: ', err);
+            showAlert('Failed to copy Job ID to clipboard', 'warning');
+        }
+        document.body.removeChild(textArea);
+    }
+}
 
 // MAIN SAVE FUNCTION - COMPLETELY REWRITTEN
 function saveRequest() {
@@ -404,7 +697,7 @@ function saveRequest() {
     const originalBtnContent = saveBtn.innerHTML;
     saveBtn.disabled = true;
     saveBtn.classList.add('btn-loading');
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    saveBtn.innerHTML = '<span class="btn-text"><i class="fas fa-save"></i> SAVE</span>';
 
     console.log('Form validation passed, submitting...');
 
@@ -665,8 +958,16 @@ function showAlert(message, type = 'info') {
     // Handle multi-line messages
     const formattedMessage = message.replace(/\n/g, '<br>');
 
+    const iconMap = {
+        'success': 'check-circle',
+        'danger': 'exclamation-triangle',
+        'warning': 'exclamation-triangle',
+        'info': 'info-circle'
+    };
+
     alertDiv.innerHTML = `
-        <strong>${type.charAt(0).toUpperCase() + type.slice(1)}:</strong> ${formattedMessage}
+        <i class="fas fa-${iconMap[type] || 'info-circle'} me-2"></i>
+        ${formattedMessage}
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     `;
 
@@ -721,6 +1022,16 @@ document.addEventListener('keydown', function(e) {
     if (e.ctrlKey && e.key === 'd') {
         e.preventDefault();
         debugFormState();
+    }
+
+    // Ctrl+C on job ID elements to copy
+    if (e.ctrlKey && e.key === 'c') {
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.classList.contains('job-id-display') || activeElement.classList.contains('job-id-input'))) {
+            e.preventDefault();
+            const textToCopy = activeElement.textContent || activeElement.value;
+            copyToClipboard(textToCopy.trim());
+        }
     }
 });
 
@@ -812,6 +1123,26 @@ document.addEventListener('DOMContentLoaded', function() {
         form.addEventListener('input', function() {
             clearTimeout(draftTimeout);
             draftTimeout = setTimeout(saveDraft, 30000);
+        });
+    }
+});
+
+// Enhanced job ID interactions
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips for job parts
+    const jobParts = document.querySelectorAll('.job-part');
+    jobParts.forEach(part => {
+        // Initialize Bootstrap tooltip if available
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            new bootstrap.Tooltip(part);
+        }
+    });
+
+    // Add focus/blur handlers for job ID input
+    const jobIdInput = document.querySelector('.job-id-input');
+    if (jobIdInput) {
+        jobIdInput.addEventListener('focus', function() {
+            this.select();
         });
     }
 });

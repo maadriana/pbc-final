@@ -71,7 +71,7 @@
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table mb-0">
                 <thead class="table-light">
                     <tr>
                         <th class="px-4 py-3">Job ID</th>
@@ -104,6 +104,7 @@
                             })->count();
                         });
 
+                        // Get engagement period display
                         $engagementPeriod = '';
                         if ($project->engagement_period_start && $project->engagement_period_end) {
                             $engagementPeriod = $project->engagement_period_start->format('Y') . '-' . $project->engagement_period_end->format('Y');
@@ -112,35 +113,44 @@
                         } else {
                             $engagementPeriod = $project->created_at->format('Y');
                         }
+
+                        // Get job ID breakdown for enhanced display
+                        $jobIdBreakdown = $project->getJobIdBreakdownAttribute();
                     @endphp
                     <tr>
                         <td class="px-4 py-3">
-                            <span class="fw-bold text-primary">{{ $project->job_id ?? sprintf('PRJ-%05d', $project->id) }}</span>
+                            <div>
+                                <span class="fw-bold text-primary d-block">{{ $project->job_id ?? 'Not Generated' }}</span>
+                                @if($jobIdBreakdown)
+                                    <small class="text-muted" title="Format: Client-YearEngaged-Series-Type-JobYear">
+                                        {{ $jobIdBreakdown['client_initial'] }}-{{ substr($jobIdBreakdown['year_engaged'], -2) }}-{{ $jobIdBreakdown['series'] }}-{{ $jobIdBreakdown['job_type_code'] }}-{{ substr($jobIdBreakdown['year_of_job'], -2) }}
+                                    </small>
+                                @endif
+                            </div>
                         </td>
                         <td class="px-4 py-3">
-                            <div class="d-flex align-items-center">
-                                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px; font-size: 14px; font-weight: 600;">
-                                    @if($project->engagement_type === 'audit')
-                                        <i class="fas fa-search"></i>
-                                    @elseif($project->engagement_type === 'accounting')
-                                        <i class="fas fa-calculator"></i>
-                                    @elseif($project->engagement_type === 'tax')
-                                        <i class="fas fa-file-invoice"></i>
-                                    @else
-                                        <i class="fas fa-briefcase"></i>
+                            <div>
+                                <div class="fw-medium">{{ $project->engagement_name ?? $project->name }}</div>
+                                <small class="text-muted d-flex align-items-center">
+                                    <span class="badge badge-outline-{{ $project->status == 'active' ? 'success' : ($project->status == 'completed' ? 'primary' : 'warning') }} me-1">
+                                        {{ ucfirst($project->status) }}
+                                    </span>
+                                    @if($jobIdBreakdown && $jobIdBreakdown['year_of_job'] != date('Y'))
+                                        <span class="badge bg-info ms-1">{{ $jobIdBreakdown['year_of_job'] }}</span>
                                     @endif
-                                </div>
-                                <div>
-                                    <div class="fw-medium">{{ $project->engagement_name ?? $project->name }}</div>
-                                    <small class="text-muted">{{ ucfirst($project->status) }}</small>
-                                </div>
+                                </small>
                             </div>
                         </td>
                         <td class="px-4 py-3">
                             @if($project->client)
                                 <div>
                                     <div class="fw-medium">{{ $project->client->company_name }}</div>
-                                    <small class="text-muted">{{ $project->client->contact_person ?? 'No contact' }}</small>
+                                    <small class="text-muted">
+                                        {{ $project->client->contact_person ?? 'No contact' }}
+                                        @if($jobIdBreakdown)
+                                            <br><span class="badge bg-light text-dark">{{ $jobIdBreakdown['client_initial'] }}</span>
+                                        @endif
+                                    </small>
                                 </div>
                             @else
                                 <span class="text-muted">No client assigned</span>
@@ -157,9 +167,14 @@
                                 ];
                                 $color = $engagementColors[$project->engagement_type] ?? 'secondary';
                             @endphp
-                            <span class="badge bg-{{ $color }}">
-                                {{ ucfirst(str_replace('_', ' ', $project->engagement_type)) }}
-                            </span>
+                            <div>
+                                <span class="badge bg-{{ $color }}">
+                                    {{ ucfirst(str_replace('_', ' ', $project->engagement_type)) }}
+                                </span>
+                                @if($jobIdBreakdown)
+                                    <br><small class="text-muted">Code: {{ $jobIdBreakdown['job_type_code'] }}</small>
+                                @endif
+                            </div>
                         </td>
                         <td class="px-4 py-3">
                             <div class="text-muted small">
@@ -167,6 +182,9 @@
                                 @if($project->engagement_period_start && $project->engagement_period_end)
                                     <br>
                                     <span class="text-muted">{{ $project->engagement_period_start->format('M Y') }} - {{ $project->engagement_period_end->format('M Y') }}</span>
+                                @endif
+                                @if($jobIdBreakdown && $jobIdBreakdown['year_engaged'])
+                                    <br><small class="text-info">Client since: {{ $jobIdBreakdown['year_engaged'] }}</small>
                                 @endif
                             </div>
                         </td>
@@ -304,6 +322,31 @@
     padding: 0.375rem 0.75rem;
 }
 
+.badge-outline-success {
+    color: #198754;
+    border: 1px solid #198754;
+    background-color: transparent;
+}
+
+.badge-outline-primary {
+    color: #0d6efd;
+    border: 1px solid #0d6efd;
+    background-color: transparent;
+}
+
+.badge-outline-warning {
+    color: #ffc107;
+    border: 1px solid #ffc107;
+    background-color: transparent;
+}
+
+/* Job ID enhanced styling */
+.job-id-breakdown {
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+
 /* Button styling */
 .btn {
     font-weight: 500;
@@ -328,11 +371,6 @@
     background-color: #fff !important;
 }
 
-/* Avatar styling */
-.rounded-circle {
-    border-radius: 50% !important;
-}
-
 /* Form styling */
 .form-label {
     font-weight: 500;
@@ -342,6 +380,11 @@
 /* Empty state styling */
 .fa-briefcase {
     color: #6c757d;
+}
+
+/* Enhanced tooltips for job ID breakdown */
+[title] {
+    position: relative;
 }
 
 /* Responsive design */
@@ -363,6 +406,11 @@
     .d-flex.gap-2 {
         flex-direction: column;
         gap: 0.5rem !important;
+    }
+
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
     }
 }
 
@@ -386,6 +434,7 @@
     background-color: #0d6efd;
     border-color: #0d6efd;
 }
+
 </style>
 @endsection
 
@@ -413,6 +462,26 @@ document.querySelector('form').addEventListener('submit', function() {
     const originalHtml = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     submitBtn.disabled = true;
+});
+
+// Enhanced tooltip for job ID breakdown
+document.addEventListener('DOMContentLoaded', function() {
+    const jobIdElements = document.querySelectorAll('[title*="Format:"]');
+
+    jobIdElements.forEach(element => {
+        element.addEventListener('mouseenter', function() {
+            // Add visual feedback for job ID structure
+            this.style.backgroundColor = '#f8f9fa';
+            this.style.borderRadius = '0.25rem';
+            this.style.padding = '0.25rem';
+        });
+
+        element.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '';
+            this.style.borderRadius = '';
+            this.style.padding = '';
+        });
+    });
 });
 </script>
 @endsection

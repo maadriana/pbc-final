@@ -210,11 +210,6 @@
                                         <i class="fas fa-download"></i>
                                     </a>
                                 @endif
-                                @if($document->status == 'uploaded')
-                                    <button type="button" class="btn btn-warning btn-sm" onclick="reviewDocument({{ $document->id }})" title="Review Document">
-                                        <i class="fas fa-clipboard-check"></i>
-                                    </button>
-                                @endif
                                 {{-- FIXED: Only allow deletion of approved/rejected documents --}}
                                 @if(in_array($document->status, ['approved', 'rejected']))
                                     <button type="button" class="btn btn-danger btn-sm" onclick="deleteDocument({{ $document->id }}, '{{ addslashes($document->original_filename) }}')" title="Delete Document">
@@ -255,32 +250,6 @@
         </div>
     </div>
     @endif
-</div>
-
-<!-- Review Modal -->
-<div class="modal fade" id="reviewModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Review Document</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Choose an action for this document:</p>
-                <div class="d-grid gap-2">
-                    <button type="button" class="btn btn-success" onclick="approveDocument()">
-                        <i class="fas fa-check me-2"></i>Approve Document
-                    </button>
-                    <button type="button" class="btn btn-danger" onclick="rejectDocument()">
-                        <i class="fas fa-times me-2"></i>Reject Document
-                    </button>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Delete Confirmation Modal -->
@@ -529,38 +498,6 @@ let selectedDocuments = [];
 const baseUrl = '{{ url("/admin/documents") }}';
 const bulkDeleteUrl = '{{ route("admin.documents.bulk-delete") }}';
 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-// Review functionality
-function reviewDocument(documentId) {
-    currentDocumentId = documentId;
-    const reviewModal = new bootstrap.Modal(document.getElementById('reviewModal'));
-    reviewModal.show();
-}
-
-function approveDocument() {
-    if (!currentDocumentId) return;
-
-    if (confirm('Approve this document?')) {
-        // Add your approve logic here
-        showAlert('Document approved successfully!', 'success');
-        const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
-        if (modal) modal.hide();
-        setTimeout(() => window.location.reload(), 1000);
-    }
-}
-
-function rejectDocument() {
-    if (!currentDocumentId) return;
-
-    const reason = prompt('Please provide a reason for rejection:');
-    if (reason) {
-        // Add your reject logic here
-        showAlert('Document rejected successfully!', 'success');
-        const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
-        if (modal) modal.hide();
-        setTimeout(() => window.location.reload(), 1000);
-    }
-}
 
 // Delete functionality
 function deleteDocument(documentId, filename) {

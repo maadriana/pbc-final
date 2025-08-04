@@ -6,13 +6,50 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h1 class="mb-1">{{ $project->engagement_name ?? 'Statutory Audit for YE122024' }}</h1>
-        <p class="text-muted mb-0">
-            {{ $client->company_name }} |
-            Job ID: {{ $project->job_id ?? '1-01-001' }} |
-            Partner: {{ $project->engagementPartner->name ?? 'EYM' }} |
-            Manager: {{ $project->manager->name ?? 'MNGR 1' }}
-        </p>
+        <h1 class="mb-1">{{ $project->engagement_name ?? 'Statutory Audit for YE2024' }}</h1>
+        <div class="text-muted mb-0">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <strong>{{ $client->company_name }}</strong>
+                </div>
+                <div class="col-auto">
+                    <span class="mx-2">|</span>
+                </div>
+                <div class="col-auto">
+                    <span class="badge bg-primary fs-6 px-3 py-2">
+                        <i class="fas fa-briefcase me-2"></i>{{ $project->job_id ?? 'ABC-22-001-A-24' }}
+                    </span>
+                </div>
+                <div class="col-auto">
+                    <span class="mx-2">|</span>
+                </div>
+                <div class="col-auto">
+                    <i class="fas fa-user-tie me-1"></i>Partner: {{ $project->engagementPartner->name ?? 'EYM' }}
+                </div>
+                <div class="col-auto">
+                    <span class="mx-2">|</span>
+                </div>
+                <div class="col-auto">
+                    <i class="fas fa-user me-1"></i>Manager: {{ $project->manager->name ?? 'MNGR 1' }}
+                </div>
+            </div>
+            @if($project->job_id)
+                @php
+                    $jobParts = $project->getJobIdParts();
+                @endphp
+                @if(!empty($jobParts))
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        <span class="me-3">Client: {{ $jobParts['client_initial'] }} (Engaged: {{ $jobParts['full_year_engaged'] }})</span>
+                        <span class="me-3">Series: {{ $jobParts['series'] }}</span>
+                        <span class="me-3">Type: {{ $project->getEngagementTypeDisplayAttribute() }} ({{ $jobParts['job_type_code'] }})</span>
+                        <span>Year: {{ $jobParts['full_year_of_job'] }}</span>
+                    </small>
+                </div>
+                @endif
+            @endif
+        </div>
     </div>
     <div class="d-flex gap-2">
         <a href="{{ route('admin.clients.projects.pbc-requests.import', [$client, $project]) }}" class="btn btn-info">
@@ -26,6 +63,62 @@
         </a>
     </div>
 </div>
+
+<!-- Job ID Summary Card -->
+@if($project->job_id && !empty($project->getJobIdParts()))
+<div class="card border-0 shadow-sm mb-4 bg-light">
+    <div class="card-body py-3">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h6 class="mb-2 text-primary">
+                    <i class="fas fa-id-card me-2"></i>Job ID Breakdown
+                </h6>
+                @php
+                    $jobParts = $project->getJobIdParts();
+                @endphp
+                <div class="row g-3">
+                    <div class="col-auto">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted fw-bold">Client Code</small>
+                            <span class="badge bg-secondary">{{ $jobParts['client_initial'] }}</span>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted fw-bold">Year Engaged</small>
+                            <span class="badge bg-info">{{ $jobParts['full_year_engaged'] }}</span>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted fw-bold">Series</small>
+                            <span class="badge bg-warning text-dark">{{ $jobParts['series'] }}</span>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted fw-bold">Job Type</small>
+                            <span class="badge bg-success">{{ $jobParts['job_type_code'] }}</span>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted fw-bold">Job Year</small>
+                            <span class="badge bg-primary">{{ $jobParts['full_year_of_job'] }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="d-flex flex-column align-items-end">
+                    <small class="text-muted">Complete Job ID</small>
+                    <h4 class="mb-0 text-primary font-monospace">{{ $project->job_id }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
 
 <!-- Search and Filter Card -->
 <div class="card border-0 shadow-sm mb-4">
@@ -50,6 +143,7 @@
                 <select name="category" class="form-select">
                     <option value="">All Categories</option>
                     <option value="CF" {{ request('category') == 'CF' ? 'selected' : '' }}>CF</option>
+                    <option value="PF" {{ request('category') == 'PF' ? 'selected' : '' }}>PF</option>
                     <option value="Other" {{ request('category') == 'Other' ? 'selected' : '' }}>Other</option>
                 </select>
             </div>
@@ -113,8 +207,13 @@
                 <i class="fas fa-file-alt text-primary me-2"></i>
                 PBC Request Items ({{ $requests->sum(function($r) { return $r->items->count(); }) }})
             </h5>
-            <div class="text-muted small">
-                {{ $requests->count() }} request(s) with {{ $requests->sum(function($r) { return $r->items->count(); }) }} total items
+            <div class="text-muted small d-flex align-items-center">
+                <i class="fas fa-info-circle me-2"></i>
+                <span>{{ $requests->count() }} request(s) with {{ $requests->sum(function($r) { return $r->items->count(); }) }} total items</span>
+                @if($project->job_id)
+                <span class="mx-2">|</span>
+                <span class="badge bg-primary">{{ $project->job_id }}</span>
+                @endif
             </div>
         </div>
     </div>
@@ -154,7 +253,7 @@
                         @endphp
                         <tr>
                             <td class="px-4 py-3">
-                                <span class="badge {{ $item->category == 'CF' ? 'bg-primary' : 'bg-secondary' }}">
+                                <span class="badge {{ $item->category == 'CF' ? 'bg-primary' : ($item->category == 'PF' ? 'bg-secondary' : 'bg-dark') }}">
                                     {{ $item->category ?? 'CF' }}
                                 </span>
                             </td>
@@ -164,22 +263,36 @@
                                     @if($item->documents->count() > 0)
                                         <small class="text-muted">{{ $item->documents->count() }} file(s)</small>
                                     @endif
+                                    <!-- Show job context -->
+                                    @if($project->job_id)
+                                        <div class="mt-1">
+                                            <small class="text-primary">
+                                                <i class="fas fa-id-badge me-1"></i>{{ $project->job_id }}
+                                            </small>
+                                        </div>
+                                    @endif
                                 </div>
                             </td>
                             <td class="px-4 py-3">
-                                <span class="text-muted">{{ $item->requestor ?? 'MNGR 1' }}</span>
-                            </td>
-                            <td class="px-4 py-3">
-                                <div class="text-muted small">
-                                    {{ $item->date_requested_formatted ?? '25/07/2025' }}
+                                <div>
+                                    <div class="fw-medium">{{ $item->requestor ?? $request->creator->name ?? 'MNGR 1' }}</div>
+                                    <small class="text-muted">{{ $request->creator->getRoleDisplayName() ?? 'Manager' }}</small>
                                 </div>
                             </td>
                             <td class="px-4 py-3">
-                                <span class="text-muted">{{ $item->assigned_to ?? 'Client Staff 1' }}</span>
+                                <div class="text-muted small">
+                                    {{ $item->date_requested_formatted ?? $request->created_at->format('d/m/Y') }}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div>
+                                    <div class="fw-medium">{{ $item->assigned_to ?? $client->contact_person ?? 'Client Staff 1' }}</div>
+                                    <small class="text-muted">Client Contact</small>
+                                </div>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="text-muted small">
-                                    {{ $item->due_date_formatted ?? '' }}
+                                    {{ $item->due_date_formatted ?? ($request->due_date ? $request->due_date->format('d/m/Y') : '') }}
                                 </div>
                             </td>
                             <td class="px-4 py-3">
@@ -261,6 +374,11 @@
                                         This project doesn't have any PBC requests yet
                                     @endif
                                 </small>
+                                @if($project->job_id)
+                                <div class="mt-2">
+                                    <small class="text-muted">Project ID: {{ $project->job_id }}</small>
+                                </div>
+                                @endif
                             </div>
                         </td>
                     </tr>
@@ -278,6 +396,9 @@
             <div class="modal-header">
                 <h5 class="modal-title" id="uploadModalLabel">
                     <i class="fas fa-cloud-upload-alt me-2"></i>Upload Document
+                    @if($project->job_id)
+                        <small class="text-muted">- {{ $project->job_id }}</small>
+                    @endif
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -285,6 +406,20 @@
                 <form id="uploadForm" enctype="multipart/form-data">
                     @csrf
                     <input type="hidden" id="itemId" name="item_id">
+
+                    <!-- Project Context -->
+                    @if($project->job_id)
+                    <div class="alert alert-info mb-4">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <div>
+                                <strong>Project:</strong> {{ $project->job_id }} - {{ $project->engagement_name }}
+                                <br>
+                                <small class="text-muted">Client: {{ $client->company_name }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
 
                     <!-- File Selection Section -->
                     <div class="mb-4">
@@ -422,6 +557,29 @@
 
 @section('styles')
 <style>
+/* Enhanced styling for job ID display */
+.badge.fs-6 {
+    font-size: 0.9rem !important;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.font-monospace {
+    font-family: 'Courier New', Courier, monospace !important;
+}
+
+/* Job ID breakdown styling */
+.job-breakdown-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid #007bff;
+}
+
+.badge.bg-secondary { background-color: #6c757d !important; }
+.badge.bg-info { background-color: #17a2b8 !important; }
+.badge.bg-warning { background-color: #ffc107 !important; color: #000 !important; }
+.badge.bg-success { background-color: #28a745 !important; }
+.badge.bg-primary { background-color: #007bff !important; }
+
 /* Table enhancements */
 .table th {
     font-weight: 600;
@@ -568,6 +726,20 @@
     color: #6c757d;
 }
 
+/* Job ID specific styling */
+.job-id-context {
+    background: linear-gradient(45deg, #e3f2fd, #f3e5f5);
+    border-left: 4px solid #2196f3;
+    border-radius: 0.5rem;
+}
+
+.job-id-badge {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 0.5rem 1rem;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
     .table-responsive {
@@ -602,6 +774,15 @@
         font-size: 1rem;
         padding: 0.5rem 0.75rem;
     }
+
+    .job-breakdown-card .row.g-3 {
+        flex-direction: column;
+        gap: 0.5rem !important;
+    }
+
+    .badge.fs-6 {
+        font-size: 0.8rem !important;
+    }
 }
 
 /* Search form styling */
@@ -633,6 +814,41 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Enhanced job ID breakdown styling */
+.job-breakdown-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.job-part-badge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    min-width: 60px;
+}
+
+/* Hover effects for interactive elements */
+.table tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Job ID in table context */
+.job-context-info {
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
 </style>
 @endsection
 
@@ -646,6 +862,20 @@ console.log('=== ROUTE DEBUG INFO ===');
 console.log('Current URL:', window.location.pathname);
 console.log('Client ID from Blade:', {{ $client->id }});
 console.log('Project ID from Blade:', {{ $project->id }});
+@if($project->job_id)
+console.log('Project Job ID:', '{{ $project->job_id }}');
+@php $jobParts = $project->getJobIdParts(); @endphp
+@if(!empty($jobParts))
+console.log('Job ID Parts:', {
+    client_initial: '{{ $jobParts["client_initial"] ?? "" }}',
+    year_engaged: '{{ $jobParts["full_year_engaged"] ?? "" }}',
+    series: '{{ $jobParts["series"] ?? "" }}',
+    job_type_code: '{{ $jobParts["job_type_code"] ?? "" }}',
+    year_of_job: '{{ $jobParts["full_year_of_job"] ?? "" }}',
+    engagement_type: '{{ $jobParts["engagement_type"] ?? "" }}'
+});
+@endif
+@endif
 
 // Parse URL to get client and project IDs
 const urlParts = window.location.pathname.split('/');
@@ -671,6 +901,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const categorySelect = document.querySelector('select[name="category"]');
+    if (categorySelect) {
+        categorySelect.addEventListener('change', function() {
+            this.form.submit();
+        });
+    }
+
     // Add CSRF token to all fetch requests
     const csrfToken = document.querySelector('meta[name="csrf-token"]');
     if (!csrfToken) {
@@ -679,6 +916,31 @@ document.addEventListener('DOMContentLoaded', function() {
         metaTag.name = 'csrf-token';
         metaTag.content = document.querySelector('input[name="_token"]')?.value || '';
         document.head.appendChild(metaTag);
+    }
+
+    // Initialize tooltips for job ID breakdown
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Enhanced search functionality with job ID context
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        // Add placeholder hint about job ID
+        const currentPlaceholder = searchInput.placeholder;
+        @if($project->job_id)
+        searchInput.placeholder = currentPlaceholder + ' (Project: {{ $project->job_id }})';
+        @endif
+
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                // Optional: Auto-submit after delay
+                // this.form.submit();
+            }, 500);
+        });
     }
 });
 
@@ -715,9 +977,12 @@ function getCsrfToken() {
     return csrfToken;
 }
 
-// Open upload modal
+// Open upload modal with job context
 function openUploadModal(itemId) {
     console.log('Opening upload modal for item:', itemId);
+    @if($project->job_id)
+    console.log('Project context:', '{{ $project->job_id }}', '{{ $project->engagement_name }}');
+    @endif
 
     const itemIdInput = document.getElementById('itemId');
     const uploadForm = document.getElementById('uploadForm');
@@ -748,9 +1013,12 @@ function openUploadModal(itemId) {
     uploadModal.show();
 }
 
-// Open reject modal
+// Open reject modal with job context
 function openRejectModal(itemId, requestId) {
     console.log('Opening reject modal for item:', itemId, 'request:', requestId);
+    @if($project->job_id)
+    console.log('Project context:', '{{ $project->job_id }}');
+    @endif
 
     const rejectItemId = document.getElementById('rejectItemId');
     const rejectRequestId = document.getElementById('rejectRequestId');
@@ -815,6 +1083,11 @@ function handleFileSelection() {
                     </p>
                     <small class="text-muted">
                         <i class="fas fa-calendar me-1"></i>Modified: ${lastModified}
+                        @if($project->job_id)
+                        <span class="ms-3 text-primary">
+                            <i class="fas fa-id-badge me-1"></i>{{ $project->job_id }}
+                        </span>
+                        @endif
                     </small>
                 </div>
             </div>
@@ -883,6 +1156,9 @@ function formatFileSize(bytes) {
 // Enhanced upload function with XMLHttpRequest and progress tracking
 function uploadDocument() {
     console.log('Starting document upload...');
+    @if($project->job_id)
+    console.log('Upload context - Project:', '{{ $project->job_id }}');
+    @endif
 
     const form = document.getElementById('uploadForm');
     const itemId = document.getElementById('itemId').value;
@@ -983,7 +1259,12 @@ function uploadDocument() {
                 progressBar.textContent = '100% - Upload Complete!';
                 statusMessage.textContent = 'File uploaded successfully!';
 
+                @if($project->job_id)
+                showAlert('Document uploaded successfully to {{ $project->job_id }}!', 'success');
+                @else
                 showAlert('Document uploaded successfully!', 'success');
+                @endif
+
                 const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
                 if (modal) modal.hide();
 
@@ -1059,6 +1340,9 @@ function resetUploadState(uploadBtn, cancelBtn, originalText, progressContainer,
 // Reject document function
 function rejectDocument() {
     console.log('=== REJECT DOCUMENT DEBUG ===');
+    @if($project->job_id)
+    console.log('Project context:', '{{ $project->job_id }}');
+    @endif
 
     const form = document.getElementById('rejectForm');
     const itemId = document.getElementById('rejectItemId').value;
@@ -1168,7 +1452,12 @@ function rejectDocument() {
         console.log('Success response:', data);
 
         if (data.success) {
+            @if($project->job_id)
+            showAlert('Document rejected successfully in {{ $project->job_id }}!', 'success');
+            @else
             showAlert('Document rejected successfully!', 'success');
+            @endif
+
             const modal = bootstrap.Modal.getInstance(document.getElementById('rejectModal'));
             if (modal) modal.hide();
             setTimeout(() => window.location.reload(), 1000);
@@ -1190,12 +1479,18 @@ function rejectDocument() {
 // View document function
 function viewDocument(documentId) {
     console.log('Viewing document:', documentId);
+    @if($project->job_id)
+    console.log('Document context - Project:', '{{ $project->job_id }}');
+    @endif
     window.open(`/documents/${documentId}/download`, '_blank');
 }
 
 // Approve item function
 function approveItem(itemId) {
     console.log('Approving item:', itemId);
+    @if($project->job_id)
+    console.log('Approval context - Project:', '{{ $project->job_id }}');
+    @endif
 
     if (!confirm('Approve this item?')) {
         return;
@@ -1234,7 +1529,11 @@ function approveItem(itemId) {
         console.log('Approve response:', data);
 
         if (data.success) {
+            @if($project->job_id)
+            showAlert('Item approved successfully in {{ $project->job_id }}!', 'success');
+            @else
             showAlert('Item approved successfully!', 'success');
+            @endif
             setTimeout(() => window.location.reload(), 1000);
         } else {
             showAlert('Failed to approve item: ' + (data.message || 'Unknown error'), 'danger');
@@ -1253,6 +1552,9 @@ function approveItem(itemId) {
 // Send reminder function
 function sendReminder(itemId) {
     console.log('Sending reminder for item:', itemId);
+    @if($project->job_id)
+    console.log('Reminder context - Project:', '{{ $project->job_id }}');
+    @endif
 
     if (!confirm('Send reminder to client for this item?')) {
         return;
@@ -1279,7 +1581,11 @@ function sendReminder(itemId) {
         },
         body: JSON.stringify({
             pbc_request_item_id: itemId,
-            reminder_type: 'standard'
+            reminder_type: 'standard',
+            @if($project->job_id)
+            project_context: '{{ $project->job_id }}',
+            @endif
+            custom_message: `Reminder for project {{ $project->job_id ?? 'N/A' }}: Your document submission is pending. Please upload as soon as possible.`
         })
     })
     .then(response => {
@@ -1290,7 +1596,12 @@ function sendReminder(itemId) {
         console.log('Reminder response:', data);
 
         if (data.success) {
+            @if($project->job_id)
+            showAlert('Reminder sent successfully for {{ $project->job_id }}!', 'success');
+            @else
             showAlert('Reminder sent successfully!', 'success');
+            @endif
+
             reminderBtn.innerHTML = '<i class="fas fa-check"></i> Sent!';
             reminderBtn.classList.add('btn-success');
             reminderBtn.classList.remove('btn-danger');
@@ -1315,7 +1626,7 @@ function sendReminder(itemId) {
     });
 }
 
-// Enhanced alert function
+// Enhanced alert function with job context
 function showAlert(message, type) {
     console.log(`Alert [${type}]:`, message);
 
@@ -1325,7 +1636,7 @@ function showAlert(message, type) {
 
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = 'top: 100px; right: 20px; z-index: 9999; min-width: 300px; max-width: 400px;';
+    alertDiv.style.cssText = 'top: 100px; right: 20px; z-index: 9999; min-width: 300px; max-width: 450px;';
 
     const iconMap = {
         'success': 'check-circle',
@@ -1334,12 +1645,25 @@ function showAlert(message, type) {
         'info': 'info-circle'
     };
 
-    alertDiv.innerHTML = `
-        <i class="fas fa-${iconMap[type] || 'info-circle'} me-2"></i>
-        ${message}
+    // Enhanced alert content with job context
+    let alertContent = `
+        <div class="d-flex align-items-start">
+            <i class="fas fa-${iconMap[type] || 'info-circle'} me-2 mt-1"></i>
+            <div class="flex-grow-1">
+                ${message}
+                @if($project->job_id)
+                <div class="mt-1">
+                    <small class="text-muted">
+                        <i class="fas fa-id-badge me-1"></i>{{ $project->job_id }}
+                    </small>
+                </div>
+                @endif
+            </div>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     `;
 
+    alertDiv.innerHTML = alertContent;
     document.body.appendChild(alertDiv);
 
     // Auto-remove after 5 seconds
@@ -1397,19 +1721,189 @@ document.getElementById('uploadModal').addEventListener('hidden.bs.modal', funct
 
 // Auto-submit search form with debounce
 let searchTimeout;
-document.querySelector('input[name="search"]').addEventListener('input', function() {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-        this.form.submit();
-    }, 500);
-});
+const searchInput = document.querySelector('input[name="search"]');
+if (searchInput) {
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            // Optional: Auto-submit search form
+            // this.form.submit();
+        }, 500);
+    });
+}
 
 // Show loading state for search
-document.querySelector('form').addEventListener('submit', function() {
-    const submitBtn = this.querySelector('button[type="submit"]');
-    const originalHtml = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    submitBtn.disabled = true;
+const searchForm = document.querySelector('form');
+if (searchForm) {
+    searchForm.addEventListener('submit', function() {
+        const submitBtn = this.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            const originalHtml = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            submitBtn.disabled = true;
+        }
+    });
+}
+
+// Enhanced job ID display functionality
+function toggleJobIdBreakdown() {
+    const breakdown = document.querySelector('.job-breakdown-section');
+    if (breakdown) {
+        const isVisible = breakdown.style.display !== 'none';
+        breakdown.style.display = isVisible ? 'none' : 'block';
+
+        // Store preference in sessionStorage
+        sessionStorage.setItem('jobBreakdownVisible', !isVisible);
+    }
+}
+
+// Restore job ID breakdown visibility on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const breakdown = document.querySelector('.job-breakdown-section');
+    const savedState = sessionStorage.getItem('jobBreakdownVisible');
+
+    if (breakdown && savedState === 'false') {
+        breakdown.style.display = 'none';
+    }
+});
+
+// Copy job ID to clipboard function
+function copyJobId() {
+    @if($project->job_id)
+    const jobId = '{{ $project->job_id }}';
+
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(jobId).then(() => {
+            showAlert('Job ID copied to clipboard: ' + jobId, 'success');
+        }).catch(err => {
+            console.error('Failed to copy job ID:', err);
+            fallbackCopyJobId(jobId);
+        });
+    } else {
+        fallbackCopyJobId(jobId);
+    }
+    @else
+    showAlert('No job ID available to copy', 'warning');
+    @endif
+}
+
+// Fallback copy function for older browsers
+function fallbackCopyJobId(jobId) {
+    const textArea = document.createElement('textarea');
+    textArea.value = jobId;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    try {
+        document.execCommand('copy');
+        showAlert('Job ID copied to clipboard: ' + jobId, 'success');
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        showAlert('Failed to copy job ID. Please copy manually: ' + jobId, 'warning');
+    }
+
+    document.body.removeChild(textArea);
+}
+
+// Export current view function (placeholder for future implementation)
+function exportCurrentView() {
+    @if($project->job_id)
+    console.log('Export requested for project:', '{{ $project->job_id }}');
+    showAlert('Export functionality for {{ $project->job_id }} coming soon!', 'info');
+    @else
+    console.log('Export requested but no job ID available');
+    showAlert('Export functionality coming soon!', 'info');
+    @endif
+}
+
+// Debug helper function
+function debugJobContext() {
+    console.log('=== JOB CONTEXT DEBUG ===');
+    @if($project->job_id)
+    console.log('Project Job ID:', '{{ $project->job_id }}');
+    console.log('Client:', '{{ $client->company_name }}');
+    console.log('Engagement:', '{{ $project->engagement_name }}');
+
+    @php $jobParts = $project->getJobIdParts(); @endphp
+    @if(!empty($jobParts))
+    console.log('Job ID Breakdown:', {
+        client_initial: '{{ $jobParts["client_initial"] ?? "" }}',
+        year_engaged: '{{ $jobParts["full_year_engaged"] ?? "" }}',
+        series: '{{ $jobParts["series"] ?? "" }}',
+        job_type_code: '{{ $jobParts["job_type_code"] ?? "" }}',
+        year_of_job: '{{ $jobParts["full_year_of_job"] ?? "" }}',
+        engagement_type: '{{ $jobParts["engagement_type"] ?? "" }}'
+    });
+    @endif
+    @else
+    console.log('No job ID available');
+    @endif
+
+    console.log('URL Context:', {
+        pathname: window.location.pathname,
+        clientId: clientIdFromUrl,
+        projectId: projectIdFromUrl
+    });
+}
+
+// Add keyboard shortcuts for job ID operations
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + J to copy job ID
+    if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
+        e.preventDefault();
+        copyJobId();
+    }
+
+    // Ctrl/Cmd + B to toggle job breakdown
+    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleJobIdBreakdown();
+    }
+
+    // Escape to close any open modals
+    if (e.key === 'Escape') {
+        const openModal = document.querySelector('.modal.show');
+        if (openModal) {
+            const modalInstance = bootstrap.Modal.getInstance(openModal);
+            if (modalInstance) modalInstance.hide();
+        }
+    }
+});
+
+// Initialize any additional functionality on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click handler for job ID badge to copy
+    @if($project->job_id)
+    const jobIdBadges = document.querySelectorAll('.job-id-badge, .badge.bg-primary');
+    jobIdBadges.forEach(badge => {
+        if (badge.textContent.includes('{{ $project->job_id }}')) {
+            badge.style.cursor = 'pointer';
+            badge.title = 'Click to copy job ID';
+            badge.addEventListener('click', copyJobId);
+        }
+    });
+    @endif
+
+    // Enhanced table row hover effects
+    const tableRows = document.querySelectorAll('.table tbody tr');
+    tableRows.forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = 'rgba(13, 110, 253, 0.08)';
+        });
+
+        row.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '';
+        });
+    });
+
+    console.log('Enhanced PBC Requests index loaded with job ID support');
+    @if($project->job_id)
+    console.log('Current project:', '{{ $project->job_id }}');
+    @endif
 });
 </script>
 @endsection
